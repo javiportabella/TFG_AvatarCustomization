@@ -3,10 +3,9 @@ import { GUI } from "./gui.js";
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // Follow this tutorial: https://docs.readyplayer.me/ready-player-me/integration-guides/api-integration/quickstart
-const SUBDOMAIN = 'oasisme'; // your project name
+const SUBDOMAIN = 'oasis'; // your project name
 const API_ID = '678787338a474ff75326a320';
 let TOKEN = null;
 
@@ -14,6 +13,7 @@ class App {
     constructor(){
         this.gui = new GUI();
         this.loader = new GLTFLoader();
+        this.templates = null;
     }
 
     async init(){
@@ -24,31 +24,52 @@ class App {
         if(data) {
             // Get access token from the response
             TOKEN = data.data.token;
+            this.initScene();
 
-            // Get list of assets
-            const assets = await this.getAllAssets();
+            this.templates = await this.getAllTemplates();
+            const htmlContainer = document.getElementById("images-container");
+            for(let i = 0; i < this.templates.length; i++) {
+                const div = document.createElement("div");
+                const img = document.createElement("img");
+                img.src = this.templates[i].imageUrl;
+                img["data-id"] = i;
 
-            if(assets) {
-                const list = assets;
-                // Show response at console log
-                console.log(list);
-                // Show response at web
-                //document.getElementById("response").innerText = JSON.stringify(list, undefined, 2);
-                
-                this.initScene();
-                for(let i = 0; i < list.length; i++) {
-                    if(list[i].modelUrl) {
-                        this.loader.load(list[i].modelUrl, ( gltf ) => {
-                            console.log(list[i].name);
-                            this.scene.add( gltf.scene );
-                
-                            this.render();             
-                        } );
+                div.appendChild(img);
+                htmlContainer.appendChild(div);
+
+                div.addEventListener("click", async (event) => {
+                    const templateData = this.templates[event.target["data-id"]];
+                    const template = await this.assignTemplate(templateData);
+                    if(template) {
+                        this.loadAvatar(template.id, "preview");
+                        htmlContainer.classList.add("hidden");
                     }
-                }
-
-                const data = await this.applyAsset(assets[0].id);
+                })
+                
             }
+            htmlContainer.classList.remove("hidden");
+            // // Get list of assets
+            // const assets = await this.getAllAssets();
+
+            // if(assets) {
+            //     const list = assets.data;
+            //     // Show response at console log
+            //     console.log(list);
+            //     // Show response at web
+            //     //document.getElementById("response").innerText = JSON.stringify(list, undefined, 2);
+                
+            //     this.initScene();
+            //     for(let i = 0; i < list.length; i++) {
+            //         if(list[i].modelUrl) {
+            //             this.loader.load( list[i].modelUrl, ( gltf ) => {
+            //                 console.log(list[i].name);
+            //                 this.scene.add( gltf.scene );
+                
+            //                 this.render();             
+            //             } );
+            //         }
+            //     }
+            // }
         }
         
     }
@@ -71,6 +92,40 @@ class App {
         return null;
     }
 
+    async getAllTemplates() {
+        const response = await fetch("https://api.readyplayer.me/v2/avatars/templates", {method: "GET", headers: {"Authorization": 'Bearer '+ TOKEN}});
+        try {
+            if(response.ok) {
+                const data = await response.json(); //get list of templates
+
+                return data.data;
+            }
+        }
+        catch(err) {
+            console.error(err);
+        }JSON.stringify({"data":{ "partner": SUBDOMAIN, "bodyType": "fullbody" }})
+    }
+
+    async assignTemplate(data) {
+
+        const requestOptions = {
+            method: "POST",
+            body: JSON.stringify({"data":{ "partner": SUBDOMAIN, "bodyType": "fullbody" }}),
+            redirect: "follow",
+            headers: {"Authorization": 'Bearer '+ TOKEN,
+                "content-type": "application/json"
+            }
+        };
+
+        try {
+            const response = await fetch("https://api.readyplayer.me/v2/avatars/templates/"+ data.id, requestOptions);
+            const result = await response.json();
+            return result.data;
+        } catch (error) {
+            console.error(error);
+        };
+    }
+
     // Get all available assets
     async getAllAssets() { // Documentation: https://docs.readyplayer.me/ready-player-me/api-reference/rest-api/assets/get-list-assets
         const response = await fetch('https://api.readyplayer.me/v1/assets', {method: "GET", headers: {"X-APP-ID": API_ID, "Authorization": 'Bearer '+ TOKEN}});
@@ -88,7 +143,7 @@ class App {
                     }
                 }
 
-                return data.data;
+                return data;
             }
             else {
                 console.error(response.status + ": " + response.statusText);
@@ -102,24 +157,22 @@ class App {
 
     async applyAsset(assetId) {
         // Aplica l'asset al avatar utilitzant l'API
-        const response = await fetch('https://api.readyplayer.me/v1/avatars/67878b01f08d27cfbf7db517/equip', {method: "POST", headers: {"X-APP-ID": API_ID,"Authorization": 'Bearer ' + TOKEN,"Content-Type": "application/json"},
-            body: JSON.stringify({"data": { assetId: assetId }}) //envia el ID del asset
+        const response = await fetch('https://api.readyplayer.me/v1/avatars/67878b01f08d27cfbf7db517/apply', {method: "POST", headers: {"X-APP-ID": API_ID,"Authorization": 'Bearer ' + TOKEN,"Content-Type": "application/json"},
+            body: JSON.stringify({ assets: [assetId] }) //envia el ID del asset
         });
     
         if (response.ok) {
             const avatarUrl = await response.json();
             console.log('Asset applied:', avatarUrl);
     
-            // // Recarga el model ocult amb el nou avatar (model actualitzat)
-            // this.loader.load(avatarUrl.updatedModelUrl, (gltf) => {
-            //     this.hiddenModel = gltf.scene.clone();
-            //     this.hiddenModel.visible = false; //mantindre ocult
-            //     this.scene.add(this.hiddenModel);
+            // Recarga el model ocult amb el nou avatar (model actualitzat)
+            this.loader.load(avatarUrl.updatedModelUrl, (gltf) => {
+                this.hiddenModel = gltf.scene.clone();
+                this.hiddenModel.visible = false; //mantindre ocult
+                this.scene.add(this.hiddenModel);
     
-            //     this.render();
-            // });
-            console.log(avatarUrl)
-            return avatarUrl.data;
+                this.render();
+            });
         } else {
             console.error('Failed to apply asset:', response.status);
         }
@@ -204,63 +257,12 @@ class App {
             console.log("Meshes guardados:", { hair: this.hairMesh, top: this.topMesh });
         }
     }
-    /*
-    deepClone(source) {
-        const clone = source.clone(false); // Create a shallow clone
-    
-        // Clone specific properties
-        clone.name = source.name;
-        clone.userData = JSON.parse(JSON.stringify(source.userData)); // Deep copy userData
-    
-        if (source.matrixAutoUpdate !== undefined) clone.matrixAutoUpdate = source.matrixAutoUpdate;
-        clone.matrixWorldNeedsUpdate = source.matrixWorldNeedsUpdate;
-    
-        if (source.layers) clone.layers.mask = source.layers.mask;
-        clone.visible = source.visible;
-        clone.castShadow = source.castShadow;
-        clone.receiveShadow = source.receiveShadow;
-        clone.frustumCulled = source.frustumCulled;
-        clone.renderOrder = source.renderOrder;
-    
-        // Clone transformations
-        clone.position.copy(source.position);
-        clone.rotation.copy(source.rotation);
-        clone.quaternion.copy(source.quaternion);
-        clone.scale.copy(source.scale);
-    
-        // Clone geometries and materials specifically for Meshes
-        if (source.isMesh || source.isSkinnedMesh) {
-            if (source.geometry) {
-                clone.geometry = source.geometry.clone();
-            }
-            if (source.material) {
-                clone.material = Array.isArray(source.material)
-                    ? source.material.map(m => m.clone())
-                    : source.material.clone();
-            }
-            if (source.isSkinnedMesh) {
-                clone.bindMode = source.bindMode;
-                clone.bindMatrix.copy(source.bindMatrix);
-                if (source.skeleton) {
-                    clone.skeleton = source.skeleton.clone(); // Or potentially just reference the original skeleton if it's not modified
-                }
-            }
-        }
-    
-        // Recursively clone children
-        source.children.forEach(child => {
-            clone.add(this.deepClone(child));
-        });
-    
-        return clone;
-    }
-    */   
 
-    initScene(){
+    async initScene(){
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color( 0xbbbbbb );
 
-        this.camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+        this.camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 1000 );
         this.camera.position.set(0, 1.5, 1.5);
         
         this.renderer = new THREE.WebGLRenderer( );
@@ -288,27 +290,9 @@ class App {
         this.visibleModel = null; // model visible al usuari
         this.hiddenModel = null; // model on s'apliquen els canvis
 
-        this.loader.load( 'https://models.readyplayer.me/67878b01f08d27cfbf7db517.glb', ( gltf ) => {
-
-            //model visible
-            this.visibleModel = gltf.scene;
-            this.scene.add(this.visibleModel);
-
-            this.hiddenModel = SkeletonUtils.clone(this.visibleModel);
-            this.hiddenModel.position.x = 1;
-            this.scene.add(this.hiddenModel);
-            // //model ocult
-            // this.loader.load('https://models.readyplayer.me/67878b01f08d27cfbf7db517.glb', (hiddenGltf) => {
-            //     this.hiddenModel = hiddenGltf.scene;
-            //     this.hiddenModel.visible = false; 
-            //     this.scene.add(this.hiddenModel);
+        await this.loadAvatar("67878b01f08d27cfbf7db517");
+        this.render();
         
-            //     this.render();
-            // });
-
-            this.render();
-
-        } );
         /*this.loader.load( 'https://models.readyplayer.me/67878b01f08d27cfbf7db517.glb', ( gltf ) => {
             // Normaliza la escala y otras propiedades antes de clonar
             gltf.scene.scale.set(1, 1, 1);
@@ -332,6 +316,21 @@ class App {
         */
 
         this.createSidebar();
+    }
+
+    loadAvatar(id, preview) {
+
+        this.loader.load( 'https://api.readyplayer.me/v2/avatars/'+id+'.glb' + (preview ? "?preview=true" : ""), ( gltf ) => {
+
+            //model visible
+            if(!this.visibleModel) {
+                this.scene.add(gltf.scene);
+            }
+            this.visibleModel = gltf.scene;
+
+            return true;
+
+        } );
     }
 
     createSidebar() {
