@@ -290,7 +290,7 @@ class App {
         this.visibleModel = null; // model visible al usuari
         this.hiddenModel = null; // model on s'apliquen els canvis
 
-        await this.loadAvatar("67878b01f08d27cfbf7db517");
+        // await this.loadAvatar("67878b01f08d27cfbf7db517");
         this.render();
         
         /*this.loader.load( 'https://models.readyplayer.me/67878b01f08d27cfbf7db517.glb', ( gltf ) => {
@@ -327,7 +327,7 @@ class App {
                 this.scene.add(gltf.scene);
             }
             this.visibleModel = gltf.scene;
-
+            this.render();
             return true;
 
         } );
