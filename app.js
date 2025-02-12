@@ -198,58 +198,7 @@ class App {
     
             console.log("Meshes guardados:", { hair: this.hairMesh, top: this.topMesh });
         }
-    }
-    /*
-    deepClone(source) {
-        const clone = source.clone(false); // Create a shallow clone
-    
-        // Clone specific properties
-        clone.name = source.name;
-        clone.userData = JSON.parse(JSON.stringify(source.userData)); // Deep copy userData
-    
-        if (source.matrixAutoUpdate !== undefined) clone.matrixAutoUpdate = source.matrixAutoUpdate;
-        clone.matrixWorldNeedsUpdate = source.matrixWorldNeedsUpdate;
-    
-        if (source.layers) clone.layers.mask = source.layers.mask;
-        clone.visible = source.visible;
-        clone.castShadow = source.castShadow;
-        clone.receiveShadow = source.receiveShadow;
-        clone.frustumCulled = source.frustumCulled;
-        clone.renderOrder = source.renderOrder;
-    
-        // Clone transformations
-        clone.position.copy(source.position);
-        clone.rotation.copy(source.rotation);
-        clone.quaternion.copy(source.quaternion);
-        clone.scale.copy(source.scale);
-    
-        // Clone geometries and materials specifically for Meshes
-        if (source.isMesh || source.isSkinnedMesh) {
-            if (source.geometry) {
-                clone.geometry = source.geometry.clone();
-            }
-            if (source.material) {
-                clone.material = Array.isArray(source.material)
-                    ? source.material.map(m => m.clone())
-                    : source.material.clone();
-            }
-            if (source.isSkinnedMesh) {
-                clone.bindMode = source.bindMode;
-                clone.bindMatrix.copy(source.bindMatrix);
-                if (source.skeleton) {
-                    clone.skeleton = source.skeleton.clone(); // Or potentially just reference the original skeleton if it's not modified
-                }
-            }
-        }
-    
-        // Recursively clone children
-        source.children.forEach(child => {
-            clone.add(this.deepClone(child));
-        });
-    
-        return clone;
-    }
-    */   
+    } 
 
     initScene(){
         this.scene = new THREE.Scene();
