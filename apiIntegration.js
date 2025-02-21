@@ -48,31 +48,104 @@ class App {
                 
             }
             htmlContainer.classList.remove("hidden");
-            // // Get list of assets
-            // const assets = await this.getAllAssets();
-
-            // if(assets) {
-            //     const list = assets.data;
-            //     // Show response at console log
-            //     console.log(list);
-            //     // Show response at web
-            //     //document.getElementById("response").innerText = JSON.stringify(list, undefined, 2);
-                
-            //     this.initScene();
-            //     for(let i = 0; i < list.length; i++) {
-            //         if(list[i].modelUrl) {
-            //             this.loader.load( list[i].modelUrl, ( gltf ) => {
-            //                 console.log(list[i].name);
-            //                 this.scene.add( gltf.scene );
-                
-            //                 this.render();             
-            //             } );
-            //         }
-            //     }
-            // }
+            if (this.templates) {
+                this.createSidebar(); // createSidebar solo se llama si templates está cargado
+            } else {
+                console.error("Error: No se pudieron cargar las plantillas de avatares.");
+            }
         }
         
     }
+
+    async selectReferenceModel(modelId) {
+        const modelUrl = `https://api.readyplayer.me/v2/avatars/${modelId}.glb`;
+        this.loader.load(modelUrl, (gltf) => {
+            const referenceModel = gltf.scene.clone();
+            this.referenceModels.push(referenceModel);
+            console.log("Referencia agregada:", modelId);
+        });
+    }
+
+    createSidebar() {
+        const sidebar = document.createElement('div');
+        sidebar.style.position = 'absolute';
+        sidebar.style.right = '0';
+        sidebar.style.top = '0';
+        sidebar.style.width = '300px';
+        sidebar.style.height = '35%';
+        sidebar.style.backgroundColor = 'rgba(139, 139, 139, 0.7)';
+        sidebar.style.overflow = 'auto';
+        sidebar.innerHTML = '<p>Interpolation</p>';
+        document.body.appendChild(sidebar);
+    
+        // Sección de sliders para interpolación
+        const parts = ["Nose", "Eyes ", "Ears ", "Jaw  ", "Chin "];
+        parts.forEach(part => {
+            let label = document.createElement('label');
+            label.innerText = `${part}`;
+            label.style.color = 'black';
+            label.style.margin = '4%';
+            let slider = document.createElement('input');
+            slider.type = 'range';
+            slider.style.width = '200px';
+            slider.style.margin = '4%';
+            slider.min = 0;
+            slider.max = 1;
+            slider.step = 0.01;
+            slider.value = 0;
+    
+            slider.addEventListener('input', (event) => {
+                this.updateMorphTarget(part, parseFloat(event.target.value));
+            });
+    
+            sidebar.appendChild(label);
+            sidebar.appendChild(slider);
+        });
+    
+        // Sección de selección de modelos de referencia
+        const referenceContainer = document.createElement('div');
+        referenceContainer.style.position = 'absolute';
+        referenceContainer.style.right = '0';
+        referenceContainer.style.top = '35%';
+        referenceContainer.style.width = '300px';
+        referenceContainer.style.height = '65%';
+        referenceContainer.style.overflow = 'auto';
+        referenceContainer.style.display = 'grid';
+        referenceContainer.style.gridTemplateColumns = 'repeat(3, 1fr)';  // Dos columnas de igual tamaño
+        referenceContainer.style.gap = '10px';  // Espacio entre las imágenes
+        //referenceContainer.innerHTML = '<p2>Reference</p2>';
+        document.body.appendChild(referenceContainer);
+    
+        this.templates.forEach(template => {
+            const div = document.createElement("div");
+            const img = document.createElement("img");
+            img.src = template.imageUrl;
+            img.style.width = "100%";
+            img.style.height = '150px';  // Establece la altura fija
+            img.style.objectFit = 'cover';
+            img.style.cursor = "pointer";
+            img.addEventListener('click', () => {
+                // Llamar a la función para seleccionar el modelo
+                this.selectReferenceModel(template.id);
+            
+                // Eliminar el borde de las imágenes previamente seleccionadas (si las hay)
+                const allImages = referenceContainer.getElementsByTagName('img');
+                Array.from(allImages).forEach(image => {
+                    image.style.border = ''; // Eliminar el borde si ya hay una imagen seleccionada
+                    image.style.borderRadius = ''; // Restablecer el border-radius
+                });
+            
+                // Agregar un borde redondeado a la imagen seleccionada
+                img.style.border = '4px solid rgb(16, 70, 120)';  // El borde tiene color azul (#3498db)
+                img.style.borderRadius = '12px';  // Bordes redondeados con radio de 12px
+            });
+            
+    
+            div.appendChild(img);
+            referenceContainer.appendChild(div);
+        });
+    }
+
 
     // Create an anonymous user for your application to get a token
     async createAnonymousUser() { // Documentation: https://docs.readyplayer.me/ready-player-me/integration-guides/api-integration/quickstart#create-anonymous-user
@@ -260,10 +333,12 @@ class App {
 
     async initScene(){
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color( 0xbbbbbb );
+        //this.scene.background = new THREE.Color( 0x1a1a1a );
+        const bgTexture = new THREE.TextureLoader().load('filesUtiles/fondoplaya.avif');
+        this.scene.background = bgTexture;
 
         this.camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 1000 );
-        this.camera.position.set(0, 1.5, 1.5);
+        this.camera.position.set(0.2, 1.5, 0.7);
         
         this.renderer = new THREE.WebGLRenderer( );
 		this.renderer.setPixelRatio( window.devicePixelRatio );
@@ -271,7 +346,9 @@ class App {
         
         this.controls = new OrbitControls( this.camera, this.renderer.domElement );
         this.controls.addEventListener( 'change', () => this.render() );
-        this.controls.target.set( 0, 1, 0 );
+        this.controls.target.set( 0, 1.5, 0 );
+        this.controls.minDistance = .4;
+        this.controls.maxDistance = 10;
         this.controls.update();
 
         document.body.appendChild(this.renderer.domElement);
@@ -281,41 +358,24 @@ class App {
             this.camera.updateProjectionMatrix();
         });
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1);
         this.scene.add(ambientLight);
         const pointLight = new THREE.PointLight(0xffffff, 1);
         pointLight.position.set(10, 10, 10);
         this.scene.add(pointLight);
+        let dirLight = new THREE.DirectionalLight ( 0xffffff, 0.5 );
+        dirLight.position.set( 3,5,3 );
+        this.scene.add( dirLight );
+
+        let ground = new THREE.Mesh( new THREE.PlaneGeometry( 300, 300 ), new THREE.MeshStandardMaterial( { color: 0x141414, depthWrite: true, roughness: 1, metalness: 0 } ) );
+        ground.rotation.x = -Math.PI / 2;
+        const gridHelper = new THREE.GridHelper( 10, 20, 0xffffff, 0xbbbbbb );
+        this.scene.add( gridHelper );
 
         this.visibleModel = null; // model visible al usuari
         this.hiddenModel = null; // model on s'apliquen els canvis
 
-        // await this.loadAvatar("67878b01f08d27cfbf7db517");
         this.render();
-        
-        /*this.loader.load( 'https://models.readyplayer.me/67878b01f08d27cfbf7db517.glb', ( gltf ) => {
-            // Normaliza la escala y otras propiedades antes de clonar
-            gltf.scene.scale.set(1, 1, 1);
-            gltf.scene.position.set(0, 0, 0);
-        
-            console.log("Original gltf.scene before cloning:", gltf.scene);
-        
-            // Modelo visible
-            this.visibleModel = this.deepClone(gltf.scene);
-            console.log("visibleModel after cloning:", this.visibleModel);
-            this.scene.add(this.visibleModel);
-        
-            // Modelo oculto para aplicar cambios
-            this.hiddenModel = this.deepClone(gltf.scene);
-            console.log("hiddenModel after cloning:", this.hiddenModel);
-            this.hiddenModel.visible = false;
-            this.scene.add(this.hiddenModel);
-        
-            this.render();
-        });
-        */
-
-        this.createSidebar();
     }
 
     loadAvatar(id, preview) {
@@ -333,17 +393,69 @@ class App {
         } );
     }
 
-    createSidebar() {
-        this.sidebar = document.createElement('div');
-        this.sidebar.style.position = 'absolute';
-        this.sidebar.style.right = '0';
-        this.sidebar.style.top = '0';
-        this.sidebar.style.width = '300px';
-        this.sidebar.style.height = '100%';
-        this.sidebar.style.backgroundColor = '#f0f0f0';
-        this.sidebar.style.overflow = 'auto';
-        document.body.appendChild(this.sidebar);
+    //fn para añadir la logica de interpolación
+    updateMorphTarget(part, value) {
+        let morphMesh = this.getPart(this.visibleModel, "Face");
+        let morphIndex = morphMesh.morphTargetDictionary[part];
+        if (morphIndex !== undefined) {
+            morphMesh.morphTargetInfluences[morphIndex] = value;
+            this.render();
+        }
     }
+
+    // Functions for INTERPOLATION between facial characteristics (morph targets)
+
+    getPart(mesh, part){
+        let face_idx = mesh.children.findIndex(obj => obj.name.includes(part));
+        if(mesh.name.includes(part)) return mesh
+        else if (face_idx == -1){
+            let head_idx =mesh.children.findIndex(obj => obj.name.includes("Head"));
+            if (head_idx != -1) return this.getPart(mesh.children[head_idx],part);
+            return this.getPart(mesh.children[0],part)
+        }// body case
+        return mesh.children[face_idx]
+    }
+
+    addMorph(target ,vertices, code,type,sel_name){
+
+        let morph_idx = this.scene.children.findIndex(obj => obj.name.includes("Blend"));
+        let morph = this.scene.children[morph_idx];
+
+        //fn to select face inside the head object 
+        morph = this.getPart(morph,"Face");
+        let face = morph;
+
+        let source_p = new THREE.Float32BufferAttribute( morph.geometry.attributes.position.array, 3 );
+        let source_n = new THREE.Float32BufferAttribute( morph.geometry.attributes.normal.array, 3 );
+        let target_p = new THREE.Float32BufferAttribute( target.geometry.attributes.position.array, 3 );
+
+        let name = code + morph.morphPartsInfo[code].length;
+        
+        if(morph.morphTargetInfluences == undefined) this.initiaizeTargets(morph,name);
+        else{ 
+            morph.morphTargetDictionary[morph.morphTargetInfluences.length]= name;
+            morph.morphTargetInfluences.push(0);
+        }
+        
+        morph.morphPartsInfo[code].push({id : morph.morphTargetInfluences.length, character: sel_name}); //store index of the morph part for the slider to know what morph influence to alter 
+        let combined = this.morphArray(source_p,target_p, vertices, type);
+        let mixed_p = combined.res;
+        let mt_p = new THREE.Float32BufferAttribute( mixed_p, 3 );
+
+        morph.geometry.morphAttributes.position.push(  mt_p );
+        morph.geometry.morphAttributes.normal.push(  source_n );  
+
+        morph = this.scene.children[morph_idx];
+        let helper_sliders;
+
+        this.scene.remove(morph);
+        this.scene.add(morph);
+        return {mph: face, helper_sliders: helper_sliders};
+    }
+
+    
+
+    // End of funtions for INTERPOLATION between facial characteristics (morph targets)
 
     updateRendererSize() {
         const sidebarWidth = this.sidebar ? this.sidebar.offsetWidth : 0;
@@ -351,20 +463,15 @@ class App {
     }
 
     onWindowResize() {
-
         this.camera.aspect = window.innerWidth / window.innerHeight;
         this.camera.updateProjectionMatrix();
-
         this.renderer.setSize( window.innerWidth, window.innerHeight );
-
         this.render();
 
     }
 
     render() {
-
         this.renderer.render( this.scene, this.camera );
-
     }
 }
 
