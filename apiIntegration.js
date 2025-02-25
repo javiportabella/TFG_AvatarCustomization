@@ -14,6 +14,8 @@ class App {
         this.gui = new GUI();
         this.loader = new GLTFLoader();
         this.templates = null;
+        this.referenceModels = []; // Para almacenar modelos de referencia para interpolación
+        this.verticesData = null; // Para almacenar los datos de verticesGlobal.json
     }
 
     async init(){
@@ -27,6 +29,7 @@ class App {
             this.initScene();
 
             this.templates = await this.getAllTemplates();
+            this.verticesData = await this.loadVerticesData();
             const htmlContainer = document.getElementById("images-container");
             for(let i = 0; i < this.templates.length; i++) {
                 const div = document.createElement("div");
@@ -58,8 +61,8 @@ class App {
     }
 
     async selectReferenceModel(modelId) {
-        const modelUrl = `https://api.readyplayer.me/v2/avatars/${modelId}.glb`;
-        this.loader.load(modelUrl, (gltf) => {
+
+        this.loader.load('https://api.readyplayer.me/v2/avatars/'+modelId+'.glb', (gltf) => {
             const referenceModel = gltf.scene.clone();
             this.referenceModels.push(referenceModel);
             console.log("Referencia agregada:", modelId);
@@ -79,7 +82,7 @@ class App {
         document.body.appendChild(sidebar);
     
         // Sección de sliders para interpolación
-        const parts = ["Nose", "Eyes ", "Ears ", "Jaw  ", "Chin "];
+        const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
         parts.forEach(part => {
             let label = document.createElement('label');
             label.innerText = `${part}`;
@@ -124,8 +127,10 @@ class App {
             img.style.height = '150px';  // Establece la altura fija
             img.style.objectFit = 'cover';
             img.style.cursor = "pointer";
-            img.addEventListener('click', () => {
+            img.addEventListener('click', async (event) => {
                 // Llamar a la función para seleccionar el modelo
+                const templateData = this.templates[event.target["data-id"]];
+                const template = await this.assignTemplate(templateData);
                 this.selectReferenceModel(template.id);
             
                 // Eliminar el borde de las imágenes previamente seleccionadas (si las hay)
@@ -153,7 +158,6 @@ class App {
         try {
             if(response.ok) {
                 return await response.json();
-
             }
             else {
                 console.error(response.status + ": " + response.statusText);
@@ -199,6 +203,7 @@ class App {
         };
     }
 
+    /*
     // Get all available assets
     async getAllAssets() { // Documentation: https://docs.readyplayer.me/ready-player-me/api-reference/rest-api/assets/get-list-assets
         const response = await fetch('https://api.readyplayer.me/v1/assets', {method: "GET", headers: {"X-APP-ID": API_ID, "Authorization": 'Bearer '+ TOKEN}});
@@ -227,109 +232,7 @@ class App {
         }
         return null;
     }
-
-    async applyAsset(assetId) {
-        // Aplica l'asset al avatar utilitzant l'API
-        const response = await fetch('https://api.readyplayer.me/v1/avatars/67878b01f08d27cfbf7db517/apply', {method: "POST", headers: {"X-APP-ID": API_ID,"Authorization": 'Bearer ' + TOKEN,"Content-Type": "application/json"},
-            body: JSON.stringify({ assets: [assetId] }) //envia el ID del asset
-        });
-    
-        if (response.ok) {
-            const avatarUrl = await response.json();
-            console.log('Asset applied:', avatarUrl);
-    
-            // Recarga el model ocult amb el nou avatar (model actualitzat)
-            this.loader.load(avatarUrl.updatedModelUrl, (gltf) => {
-                this.hiddenModel = gltf.scene.clone();
-                this.hiddenModel.visible = false; //mantindre ocult
-                this.scene.add(this.hiddenModel);
-    
-                this.render();
-            });
-        } else {
-            console.error('Failed to apply asset:', response.status);
-        }
-    }
-
-    async changeAssetAndReloadModel(modelId, assetId, modelUrl) {
-        const url = `https://api.readyplayer.me/v1/models/${modelId}/assets/${assetId}`;
-    
-        try {
-            const response = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${TOKEN}`, // Requiere token de autenticación
-                    "Content-Type": "application/json",
-                    "X-APP-ID": API_ID
-                }
-            });
-            if (response.ok) {
-                console.log(`Asset successfully updated in the model ${modelId}`);
-                const updatedData = await response.json();
-                console.log("Asset actualizado. Recargando modelo...");
-                return await this.reloadModel(modelUrl);
-            } else {
-                console.error(`Error ${response.status}: Failed to update asset.`);
-            }
-        } catch (error) {
-            console.error(`Error making request: ${error}`);
-        }
-        return null;
-    }
-
-    async reloadModel(modelUrl) {
-        const loader = new THREE.GLTFLoader();
-    
-        try {
-            const gltf = await loader.loadAsync(modelUrl);
-    
-            // Elimina el modelo actual de la escena, si existe
-            if (this.visibleModel) {
-                this.scene.remove(this.visibleModel);
-                this.visibleModel = null;
-            }
-    
-            // Añade el nuevo modelo a la escena
-            this.visibleModel = gltf.scene;
-            this.scene.add(this.visibleModel);
-    
-            console.log("Modelo recargado con éxito.");
-            return gltf.scene; // Devuelve el modelo cargado
-        } catch (error) {
-            console.error(`Error al recargar el modelo: ${error}`);
-        }
-    }
-
-    findSkinnedMeshes(model) {
-        const skinnedMeshes = {}; // Aquí guardaremos los assets que nos interesen
-    
-        model.traverse((child) => {
-            if (child.isSkinnedMesh) {
-                // Clasifica por nombre, ID, o algún criterio propio
-                const name = child.name || `mesh_${child.id}`;
-                skinnedMeshes[name] = child;
-                console.log(`SkinnedMesh encontrado: ${name}`);
-            }
-        });
-    
-        return skinnedMeshes;
-    }
-
-    async manageModelAssets(modelId, assetId, modelUrl) {
-        // Actualiza el asset en la API y recarga el modelo
-        const updatedModel = await this.changeAssetAndReloadModel(modelId, assetId, modelUrl);
-    
-        if (updatedModel) {
-            console.log("Buscando SkinnedMeshes en el modelo...");
-            const meshes = this.findSkinnedMeshes(updatedModel);
-    
-            // Guarda las referencias en variables separadas según un criterio
-            this.hairMesh = meshes["hair"] || null; // Ejemplo: Nombre debe ser 'hair'
-            this.topMesh = meshes["top"] || null;   // Ejemplo: Nombre debe ser 'top'
-    
-            console.log("Meshes guardados:", { hair: this.hairMesh, top: this.topMesh });
-        }
-    }
+    */
 
     async initScene(){
         this.scene = new THREE.Scene();
@@ -393,57 +296,96 @@ class App {
         } );
     }
 
+    // Functions for INTERPOLATION between facial characteristics (morph targets)
+
+    async loadVerticesData() {
+        try {
+            const response = await fetch("ImportExportVertices/verticesGlobal.json");
+            if (!response.ok) throw new Error("No se pudo cargar verticesGlobal.json");
+            return await response.json();
+        } catch (error) {
+            console.error("Error cargando verticesGlobal.json:", error);
+            return null;
+        }
+    }
+
     //fn para añadir la logica de interpolación
     updateMorphTarget(part, value) {
+        if (!this.verticesData || !this.verticesData[part]) {
+            console.warn(`No hay datos de vértices para ${part}`);
+            return;
+        }
+        
         let morphMesh = this.getPart(this.visibleModel, "Face");
         let morphIndex = morphMesh.morphTargetDictionary[part];
+        
         if (morphIndex !== undefined) {
-            morphMesh.morphTargetInfluences[morphIndex] = value;
+            const sourceVertices = morphMesh.geometry.attributes.position.array.slice();
+            const targetMesh = this.referenceModels[0]; // Usa el primer modelo de referencia cargado
+            
+            if (!targetMesh) {
+                console.warn("No hay modelo de referencia para interpolar");
+                return;
+            }
+            
+            const targetVertices = targetMesh.geometry.attributes.position.array;
+            const affectedVertices = this.verticesData[part];
+            console.log(`Affected Vertices: ${affectedVertices}`);
+            
+            for (let i of affectedVertices) {
+                sourceVertices[i * 3] = (1 - value) * sourceVertices[i * 3] + value * targetVertices[i * 3];
+                sourceVertices[i * 3 + 1] = (1 - value) * sourceVertices[i * 3 + 1] + value * targetVertices[i * 3 + 1];
+                sourceVertices[i * 3 + 2] = (1 - value) * sourceVertices[i * 3 + 2] + value * targetVertices[i * 3 + 2];
+            }
+            
+            morphMesh.geometry.attributes.position.array = sourceVertices;
+            morphMesh.geometry.attributes.position.needsUpdate = true;
             this.render();
         }
     }
 
-    // Functions for INTERPOLATION between facial characteristics (morph targets)
-
-    getPart(mesh, part){
+    getPart(mesh, part) {
+        if (!mesh || !mesh.children) {
+            console.error("Error: mesh es undefined o no tiene hijos", mesh);
+            return null;
+        }
         let face_idx = mesh.children.findIndex(obj => obj.name.includes(part));
-        if(mesh.name.includes(part)) return mesh
-        else if (face_idx == -1){
-            let head_idx =mesh.children.findIndex(obj => obj.name.includes("Head"));
-            if (head_idx != -1) return this.getPart(mesh.children[head_idx],part);
-            return this.getPart(mesh.children[0],part)
-        }// body case
-        return mesh.children[face_idx]
+        if (mesh.name.includes(part)) return mesh;
+
+        if (face_idx == -1) {
+            let head_idx = mesh.children.findIndex(obj => obj.name.includes("Head"));
+            if (head_idx != -1) return this.getPart(mesh.children[head_idx], part);
+            return this.getPart(mesh.children[0], part);
+        }
+        return mesh.children[face_idx];
     }
+    
 
-    addMorph(target ,vertices, code,type,sel_name){
-
+    addMorph(target, vertices, code, type, sel_name){
         let morph_idx = this.scene.children.findIndex(obj => obj.name.includes("Blend"));
         let morph = this.scene.children[morph_idx];
-
-        //fn to select face inside the head object 
-        morph = this.getPart(morph,"Face");
+        morph = this.getPart(morph, "Face");
         let face = morph;
 
-        let source_p = new THREE.Float32BufferAttribute( morph.geometry.attributes.position.array, 3 );
-        let source_n = new THREE.Float32BufferAttribute( morph.geometry.attributes.normal.array, 3 );
-        let target_p = new THREE.Float32BufferAttribute( target.geometry.attributes.position.array, 3 );
+        let source_p = new THREE.Float32BufferAttribute(morph.geometry.attributes.position.array, 3);
+        let source_n = new THREE.Float32BufferAttribute(morph.geometry.attributes.normal.array, 3);
+        let target_p = new THREE.Float32BufferAttribute(target.geometry.attributes.position.array, 3);
 
         let name = code + morph.morphPartsInfo[code].length;
         
-        if(morph.morphTargetInfluences == undefined) this.initiaizeTargets(morph,name);
-        else{ 
-            morph.morphTargetDictionary[morph.morphTargetInfluences.length]= name;
+        if (!morph.morphTargetInfluences) this.initializeTargets(morph, name);
+        else {
+            morph.morphTargetDictionary[morph.morphTargetInfluences.length] = name;
             morph.morphTargetInfluences.push(0);
         }
         
-        morph.morphPartsInfo[code].push({id : morph.morphTargetInfluences.length, character: sel_name}); //store index of the morph part for the slider to know what morph influence to alter 
-        let combined = this.morphArray(source_p,target_p, vertices, type);
+        morph.morphPartsInfo[code].push({id : morph.morphTargetInfluences.length, character: sel_name});
+        let combined = this.morphArray(source_p, target_p, vertices, type);
         let mixed_p = combined.res;
-        let mt_p = new THREE.Float32BufferAttribute( mixed_p, 3 );
+        let mt_p = new THREE.Float32BufferAttribute(mixed_p, 3);
 
-        morph.geometry.morphAttributes.position.push(  mt_p );
-        morph.geometry.morphAttributes.normal.push(  source_n );  
+        morph.geometry.morphAttributes.position.push(mt_p);
+        morph.geometry.morphAttributes.normal.push(source_n);
 
         morph = this.scene.children[morph_idx];
         let helper_sliders;
@@ -453,8 +395,6 @@ class App {
         return {mph: face, helper_sliders: helper_sliders};
     }
 
-    
-
     // End of funtions for INTERPOLATION between facial characteristics (morph targets)
 
     updateRendererSize() {
@@ -462,13 +402,14 @@ class App {
         this.renderer.setSize(window.innerWidth - sidebarWidth, window.innerHeight);
     }
 
+    /*
     onWindowResize() {
         this.camera.aspect = window.innerWidth / window.innerHeight;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize( window.innerWidth, window.innerHeight );
         this.render();
-
     }
+    */
 
     render() {
         this.renderer.render( this.scene, this.camera );
