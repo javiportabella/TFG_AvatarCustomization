@@ -70,28 +70,63 @@ class App {
     }
 
     createSidebar() {
-        const sidebar = document.createElement('div');
-        sidebar.style.position = 'absolute';
-        sidebar.style.right = '0';
-        sidebar.style.top = '0';
-        sidebar.style.width = '300px';
-        sidebar.style.height = '35%';
-        sidebar.style.backgroundColor = 'rgba(139, 139, 139, 0.7)';
-        sidebar.style.overflow = 'auto';
-        sidebar.innerHTML = '<p>Interpolation</p>';
-        document.body.appendChild(sidebar);
+        // Crear el contenedor de la sidebar
+        const sidebarContainer = document.createElement('div');
+        sidebarContainer.style.position = 'absolute';
+        sidebarContainer.style.right = '0';
+        sidebarContainer.style.top = '0';
+        sidebarContainer.style.width = '300px';
+        sidebarContainer.style.height = '100%';
+        sidebarContainer.style.backgroundColor = 'rgba(139, 139, 139, 0.7)';
+        sidebarContainer.style.overflow = 'auto';
+        sidebarContainer.style.padding = '10px';
+        sidebarContainer.style.boxShadow = '0px 0px 10px rgba(0,0,0,0.3)';
+        document.body.appendChild(sidebarContainer);
     
-        // Sección de sliders para interpolación
+        // Función para crear un desplegable
+        const createDropdown = (title) => {
+            const section = document.createElement('div');
+            section.style.marginBottom = '10px';
+    
+            const header = document.createElement('div');
+            header.innerText = title;
+            header.style.backgroundColor = 'rgb(16, 70, 120)';
+            header.style.color = 'white';
+            header.style.padding = '10px';
+            header.style.cursor = 'pointer';
+            header.style.borderRadius = '5px';
+            header.style.textAlign = 'center';
+    
+            const content = document.createElement('div');
+            content.style.display = 'none';
+            content.style.padding = '10px';
+    
+            // Alternar visibilidad al hacer clic
+            header.addEventListener('click', () => {
+                content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            });
+    
+            section.appendChild(header);
+            section.appendChild(content);
+            sidebarContainer.appendChild(section);
+    
+            return content;
+        };
+    
+        // ====== INTERPOLATION ======
+        const interpolationContent = createDropdown('Interpolation');
+    
+        // Sliders
         const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
         parts.forEach(part => {
             let label = document.createElement('label');
             label.innerText = `${part}`;
             label.style.color = 'black';
             label.style.margin = '4%';
+    
             let slider = document.createElement('input');
             slider.type = 'range';
-            slider.style.width = '200px';
-            slider.style.margin = '4%';
+            slider.style.width = '100%';
             slider.min = 0;
             slider.max = 1;
             slider.step = 0.01;
@@ -101,55 +136,61 @@ class App {
                 this.updateMorphTarget(part, parseFloat(event.target.value));
             });
     
-            sidebar.appendChild(label);
-            sidebar.appendChild(slider);
+            interpolationContent.appendChild(label);
+            interpolationContent.appendChild(slider);
         });
     
-        // Sección de selección de modelos de referencia
+        // Contenedor de selección de modelos
         const referenceContainer = document.createElement('div');
-        referenceContainer.style.position = 'absolute';
-        referenceContainer.style.right = '0';
-        referenceContainer.style.top = '35%';
-        referenceContainer.style.width = '300px';
-        referenceContainer.style.height = '65%';
-        referenceContainer.style.overflow = 'auto';
         referenceContainer.style.display = 'grid';
-        referenceContainer.style.gridTemplateColumns = 'repeat(3, 1fr)';  // Dos columnas de igual tamaño
-        referenceContainer.style.gap = '10px';  // Espacio entre las imágenes
-        //referenceContainer.innerHTML = '<p2>Reference</p2>';
-        document.body.appendChild(referenceContainer);
+        referenceContainer.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        referenceContainer.style.gap = '10px';
+        referenceContainer.style.marginTop = '10px';
+        interpolationContent.appendChild(referenceContainer);
     
-        this.templates.forEach(template => {
+        this.templates.forEach((template, index) => {
             const div = document.createElement("div");
             const img = document.createElement("img");
             img.src = template.imageUrl;
             img.style.width = "100%";
-            img.style.height = '150px';  // Establece la altura fija
+            img.style.height = '80px';
             img.style.objectFit = 'cover';
             img.style.cursor = "pointer";
+            img.setAttribute("data-id", index);
+    
             img.addEventListener('click', async (event) => {
-                // Llamar a la función para seleccionar el modelo
-                const templateData = this.templates[event.target["data-id"]];
+                const templateData = this.templates[event.target.getAttribute("data-id")];
                 const template = await this.assignTemplate(templateData);
                 this.selectReferenceModel(template.id);
-            
-                // Eliminar el borde de las imágenes previamente seleccionadas (si las hay)
+    
+                // Resaltar la imagen seleccionada
                 const allImages = referenceContainer.getElementsByTagName('img');
                 Array.from(allImages).forEach(image => {
-                    image.style.border = ''; // Eliminar el borde si ya hay una imagen seleccionada
-                    image.style.borderRadius = ''; // Restablecer el border-radius
+                    image.style.border = '';
+                    image.style.borderRadius = '';
                 });
-            
-                // Agregar un borde redondeado a la imagen seleccionada
-                img.style.border = '4px solid rgb(16, 70, 120)';  // El borde tiene color azul (#3498db)
-                img.style.borderRadius = '12px';  // Bordes redondeados con radio de 12px
+    
+                img.style.border = '4px solid rgb(16, 70, 120)';
+                img.style.borderRadius = '12px';
             });
-            
     
             div.appendChild(img);
             referenceContainer.appendChild(div);
         });
+    
+        // ====== RECOLORING ======
+        const recoloringContent = createDropdown('Recoloring');
+        const recoloringText = document.createElement('p');
+        recoloringText.innerText = 'Opciones de recoloring aquí...';
+        recoloringContent.appendChild(recoloringText);
+    
+        // ====== WRINKLE MAPS ======
+        const wrinkleContent = createDropdown('Wrinkle Maps');
+        const wrinkleText = document.createElement('p');
+        wrinkleText.innerText = 'Opciones de wrinkle maps aquí...';
+        wrinkleContent.appendChild(wrinkleText);
     }
+    
 
 
     // Create an anonymous user for your application to get a token
@@ -345,20 +386,30 @@ class App {
     }
 
     getPart(mesh, part) {
-        if (!mesh || !mesh.children) {
+        if (!mesh || !mesh.children || mesh.children.length === 0) {
             console.error("Error: mesh es undefined o no tiene hijos", mesh);
             return null;
         }
-        let face_idx = mesh.children.findIndex(obj => obj.name.includes(part));
+    
+        // Si el nombre de la mesh coincide con la parte, lo retornamos directamente
         if (mesh.name.includes(part)) return mesh;
-
-        if (face_idx == -1) {
-            let head_idx = mesh.children.findIndex(obj => obj.name.includes("Head"));
-            if (head_idx != -1) return this.getPart(mesh.children[head_idx], part);
-            return this.getPart(mesh.children[0], part);
-        }
-        return mesh.children[face_idx];
+    
+        // Buscar índice de la parte en los hijos
+        let face_idx = mesh.children.findIndex(obj => obj.name.includes(part));
+    
+        if (face_idx !== -1) return mesh.children[face_idx];
+    
+        // Buscar índice de la cabeza si no encontramos la parte
+        let head_idx = mesh.children.findIndex(obj => obj.name.includes("Head"));
+        if (head_idx !== -1) return this.getPart(mesh.children[head_idx], part);
+    
+        // Si hay hijos, buscar en el primero de ellos
+        if (mesh.children.length > 0) return this.getPart(mesh.children[0], part);
+    
+        console.error("Error: No se encontró la parte", part, "en el mesh", mesh);
+        return null;
     }
+    
     
 
     addMorph(target, vertices, code, type, sel_name){
