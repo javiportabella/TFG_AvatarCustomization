@@ -16,6 +16,7 @@ class App {
         this.templates = null;
         this.referenceModels = []; // Para almacenar modelos de referencia para interpolación
         this.verticesData = null; // Para almacenar los datos de verticesGlobal.json
+        this.preloadAvatarTemplates = [];
     }
 
     async init(){
@@ -226,22 +227,31 @@ class App {
 
     async assignTemplate(data) {
 
-        const requestOptions = {
-            method: "POST",
-            body: JSON.stringify({"data":{ "partner": SUBDOMAIN, "bodyType": "fullbody" }}),
-            redirect: "follow",
-            headers: {"Authorization": 'Bearer '+ TOKEN,
-                "content-type": "application/json"
-            }
-        };
+        if(!this.preloadAvatarTemplates[data.id]) {
+            const requestOptions = {
+                method: "POST",
+                body: JSON.stringify({"data":{ "partner": SUBDOMAIN, "bodyType": "fullbody" }}),
+                redirect: "follow",
+                headers: {"Authorization": 'Bearer '+ TOKEN,
+                    "content-type": "application/json"
+                }
+            };
+    
+            try {
+                let response = await fetch("https://api.readyplayer.me/v2/avatars/templates/"+ data.id, requestOptions);
+                let result = await response.json();
+    
+                requestOptions.method = "PUT";
+                response = await fetch("https://api.readyplayer.me/v2/avatars/"+ result.data.id, requestOptions);
+                this.preloadAvatarTemplates[data.id] = {id: result.data.id};
+                return result.data;
+                
+            } catch (error) {
+                console.error(error);
+            };
 
-        try {
-            const response = await fetch("https://api.readyplayer.me/v2/avatars/templates/"+ data.id, requestOptions);
-            const result = await response.json();
-            return result.data;
-        } catch (error) {
-            console.error(error);
-        };
+        }
+        return this.preloadAvatarTemplates[data.id];
     }
 
     /*
@@ -324,7 +334,8 @@ class App {
 
     loadAvatar(id, preview) {
 
-        this.loader.load( 'https://api.readyplayer.me/v2/avatars/'+id+'.glb' + (preview ? "?preview=true" : ""), ( gltf ) => {
+        // this.loader.load( 'https://api.readyplayer.me/v2/avatars/'+id+'.glb' + (preview ? "?preview=true" : ""), ( gltf ) => {
+        this.loader.load( 'https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), ( gltf ) => {
 
             //model visible
             if(!this.visibleModel) {
