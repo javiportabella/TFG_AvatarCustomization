@@ -254,37 +254,6 @@ class App {
         return this.preloadAvatarTemplates[data.id];
     }
 
-    /*
-    // Get all available assets
-    async getAllAssets() { // Documentation: https://docs.readyplayer.me/ready-player-me/api-reference/rest-api/assets/get-list-assets
-        const response = await fetch('https://api.readyplayer.me/v1/assets', {method: "GET", headers: {"X-APP-ID": API_ID, "Authorization": 'Bearer '+ TOKEN}});
-        try {
-            if(response.ok) {
-                const data = await response.json(); //obtenim la llista d'assets
-
-                //guardar les imatges dels assets
-                if(data && data.data) { 
-                    const assets = data.data; 
-                    console.log("Lista de assets: ", assets);
-                    // Extrae los datos relevantes para las imágenes de cada asset
-                    for(const asset of assets) { 
-                        console.log(`Nombre del asset: ${asset.name}, Imagen del asset: ${asset.preview}`); 
-                    }
-                }
-
-                return data;
-            }
-            else {
-                console.error(response.status + ": " + response.statusText);
-            }
-        }
-        catch(error) {
-            console.error(error);
-        }
-        return null;
-    }
-    */
-
     async initScene(){
         this.scene = new THREE.Scene();
         //this.scene.background = new THREE.Color( 0x1a1a1a );
