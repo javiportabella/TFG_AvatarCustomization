@@ -64,9 +64,29 @@ class App {
     async selectReferenceModel(modelId) {
 
         this.loader.load('https://api.readyplayer.me/v2/avatars/'+modelId+'.glb', (gltf) => {
-            const referenceModel = gltf.scene.clone();
+            const referenceModel = gltf.scene;
+
+            /*//Aquí inspeccionamos el modelo para ver todas las partes
+            console.log("Modelo cargado:", referenceModel);
+            referenceModel.traverse((child) => {
+                console.log("Nombre:", child.name, "Tipo:", child.type);
+            });*/
+
             this.referenceModels.push(referenceModel);
+
+            this.referenceModels[0].traverse((child) => {
+                if (child.isMesh) {
+                  console.log("Mesh encontrada:", child.name);
+                  console.log("Geometry:", child.geometry);
+                  console.log("Attributes:", child.geometry.attributes);
+                  console.log("Positions:", child.geometry.attributes.position);
+                }
+              });
+              
+
             console.log("Referencia agregada:", modelId);
+            //this.scene.add(referenceModel);
+            //this.render();
         });
     }
 
@@ -337,7 +357,7 @@ class App {
             return;
         }
         
-        let morphMesh = this.getPart(this.visibleModel, "Face");
+        let morphMesh = this.getPart(this.visibleModel, "Wolf3D_Head");
         let morphIndex = morphMesh.morphTargetDictionary[part];
         
         if (morphIndex !== undefined) {
@@ -366,27 +386,24 @@ class App {
     }
 
     getPart(mesh, part) {
-        if (!mesh || !mesh.children || mesh.children.length === 0) {
-            console.error("Error: mesh es undefined o no tiene hijos", mesh);
+        if (!mesh) {
+            console.error("Error: mesh es undefined", mesh);
             return null;
         }
     
         // Si el nombre de la mesh coincide con la parte, lo retornamos directamente
         if (mesh.name.includes(part)) return mesh;
     
-        // Buscar índice de la parte en los hijos
-        let face_idx = mesh.children.findIndex(obj => obj.name.includes(part));
-    
-        if (face_idx !== -1) return mesh.children[face_idx];
-    
-        // Buscar índice de la cabeza si no encontramos la parte
-        let head_idx = mesh.children.findIndex(obj => obj.name.includes("Head"));
-        if (head_idx !== -1) return this.getPart(mesh.children[head_idx], part);
-    
-        // Si hay hijos, buscar en el primero de ellos
-        if (mesh.children.length > 0) return this.getPart(mesh.children[0], part);
-    
-        console.error("Error: No se encontró la parte", part, "en el mesh", mesh);
+        // Si tiene hijos, buscamos recursivamente
+        if (mesh.children && mesh.children.length > 0) {
+            for (let child of mesh.children) {
+                let result = this.getPart(child, part);
+                if (result) return result;
+            }
+        }
+
+        // Si no se encontró nada
+        console.warn(`No se encontró la parte '${part}' en el mesh`, mesh);
         return null;
     }
     
@@ -395,7 +412,7 @@ class App {
     addMorph(target, vertices, code, type, sel_name){
         let morph_idx = this.scene.children.findIndex(obj => obj.name.includes("Blend"));
         let morph = this.scene.children[morph_idx];
-        morph = this.getPart(morph, "Face");
+        morph = this.getPart(morph, "Wolf3D_Head");
         let face = morph;
 
         let source_p = new THREE.Float32BufferAttribute(morph.geometry.attributes.position.array, 3);
