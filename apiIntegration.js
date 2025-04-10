@@ -30,7 +30,7 @@ class App {
             this.initScene();
 
             this.templates = await this.getAllTemplates();
-            this.verticesData = await this.loadVerticesData();
+            this.verticesData = await this.loadVerticesData(); //Load the JSON file with the vertices data
             const htmlContainer = document.getElementById("images-container");
             for(let i = 0; i < this.templates.length; i++) {
                 const div = document.createElement("div");
@@ -42,6 +42,8 @@ class App {
                 htmlContainer.appendChild(div);
 
                 div.addEventListener("click", async (event) => {
+                    // We use the data-id attribute to get the index of the template 
+                    // and then we get the template data from the templates array
                     const templateData = this.templates[event.target["data-id"]];
                     const template = await this.assignTemplate(templateData);
                     if(template) {
@@ -66,30 +68,14 @@ class App {
         this.loader.load('https://api.readyplayer.me/v2/avatars/'+modelId+'.glb', (gltf) => {
             const referenceModel = gltf.scene;
 
-            /*//Aquí inspeccionamos el modelo para ver todas las partes
-            console.log("Modelo cargado:", referenceModel);
-            referenceModel.traverse((child) => {
-                console.log("Nombre:", child.name, "Tipo:", child.type);
-            });*/
-
             this.referenceModels.push(referenceModel);
-
-            this.referenceModels[0].traverse((child) => {
-                if (child.isMesh) {
-                  console.log("Mesh encontrada:", child.name);
-                  console.log("Geometry:", child.geometry);
-                  console.log("Attributes:", child.geometry.attributes);
-                  console.log("Positions:", child.geometry.attributes.position);
-                }
-              });
-              
-
             console.log("Referencia agregada:", modelId);
             //this.scene.add(referenceModel);
             //this.render();
         });
     }
 
+    // Funció per crear la sidebar amb tres seccions desplegables: Interpolation, Recoloring i Wrinkle Maps.
     createSidebar() {
         // Crear el contenedor de la sidebar
         const sidebarContainer = document.createElement('div');
@@ -236,7 +222,6 @@ class App {
         try {
             if(response.ok) {
                 const data = await response.json(); //get list of templates
-
                 return data.data;
             }
         }
@@ -322,19 +307,65 @@ class App {
     }
 
     loadAvatar(id, preview) {
-
-        // this.loader.load( 'https://api.readyplayer.me/v2/avatars/'+id+'.glb' + (preview ? "?preview=true" : ""), ( gltf ) => {
-        this.loader.load( 'https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), ( gltf ) => {
-
+        this.loader.load('https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), (gltf) => {
             //model visible
             if(!this.visibleModel) {
                 this.scene.add(gltf.scene);
             }
             this.visibleModel = gltf.scene;
+            
+            // Buscar la malla de la cabeza
+            const headMesh = this.getPart(this.visibleModel, "Wolf3D_Head");
+            
+            if (headMesh && this.referenceModels.length > 0) {
+                // Obtener la malla de referencia
+                const referenceHead = this.getPart(this.referenceModels[0], "Wolf3D_Head");
+                
+                if (referenceHead) {
+                    // Añadir morph targets para cada parte
+                    const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
+                    parts.forEach(part => {
+                        if (this.verticesData[part]) {
+                            this.addMorph(
+                                referenceHead, 
+                                this.verticesData[part], 
+                                part, 
+                                [part], 
+                                `Reference_${part}`
+                            );
+                        }
+                    });
+                }
+            }
+            
             this.render();
             return true;
+        });
+    }
 
-        } );
+    initializeMorphTargets(headMesh) {
+        // Verifica si ya tiene morph targets inicializados
+        if (!headMesh.morphTargetInfluences) {
+            headMesh.morphTargetInfluences = [];
+            headMesh.morphTargetDictionary = {};
+            
+            // Inicializa los morph targets para cada parte
+            const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
+            parts.forEach(part => {
+                if (!headMesh.morphTargetDictionary[part]) {
+                    headMesh.morphTargetDictionary[part] = headMesh.morphTargetInfluences.length;
+                    headMesh.morphTargetInfluences.push(0);
+                }
+            });
+            
+            // Asegúrate de que la geometría tenga los atributos necesarios
+            if (!headMesh.geometry.morphAttributes) {
+                headMesh.geometry.morphAttributes = {
+                    position: [],
+                    normal: []
+                };
+            }
+        }
     }
 
     // Functions for INTERPOLATION between facial characteristics (morph targets)
@@ -357,9 +388,19 @@ class App {
             return;
         }
         
-        let morphMesh = this.getPart(this.visibleModel, "Wolf3D_Head");
+        //we need to get the mesh from the visible model
+        let morphMesh = this.visibleModel.getObjectByName("Wolf3D_Head");
+        if (!morphMesh) {
+            console.warn(`'Wolf3D_Head' no se ha encontrado`);
+            return;
+        }
+
+        // Configuramos el morph target si no está inicializado
+        if (morphMesh.morphTargetInfluences === undefined) {
+            this.initializeMorphTargets(morphMesh);
+        }
+
         let morphIndex = morphMesh.morphTargetDictionary[part];
-        
         if (morphIndex !== undefined) {
             const sourceVertices = morphMesh.geometry.attributes.position.array.slice();
             const targetMesh = this.referenceModels[0]; // Usa el primer modelo de referencia cargado
@@ -378,36 +419,36 @@ class App {
                 sourceVertices[i * 3 + 1] = (1 - value) * sourceVertices[i * 3 + 1] + value * targetVertices[i * 3 + 1];
                 sourceVertices[i * 3 + 2] = (1 - value) * sourceVertices[i * 3 + 2] + value * targetVertices[i * 3 + 2];
             }
-            
-            morphMesh.geometry.attributes.position.array = sourceVertices;
+            //we update the mesh with the new vertices
+            morphMesh.geometry.attributes.position.setArray(sourceVertices); //crec que és el mateix però era per probar
+            //morphMesh.geometry.attributes.position.array = sourceVertices;
             morphMesh.geometry.attributes.position.needsUpdate = true;
             this.render();
         }
     }
 
-    getPart(mesh, part) {
+    /*getPart(mesh, part) {
         if (!mesh) {
-            console.error("Error: mesh es undefined", mesh);
+            console.error("Error: mesh es undefined");
             return null;
         }
-    
-        // Si el nombre de la mesh coincide con la parte, lo retornamos directamente
-        if (mesh.name.includes(part)) return mesh;
-    
-        // Si tiene hijos, buscamos recursivamente
-        if (mesh.children && mesh.children.length > 0) {
-            for (let child of mesh.children) {
-                let result = this.getPart(child, part);
-                if (result) return result;
-            }
+        
+        // Usamos getObjectByName para buscar directamente el objeto
+        const found = mesh.getObjectByName(part);
+        if (found) return found;
+        
+        // Si no se encontró, buscamos en los hijos (por si el nombre no está exacto)
+        for (let child of mesh.children) {
+            const result = this.getPart(child, part);
+            if (result) return result;
         }
-
-        // Si no se encontró nada
+        
         console.warn(`No se encontró la parte '${part}' en el mesh`, mesh);
         return null;
-    }
-    
-    
+    }*/
+    getPart(mesh, part) {
+        return mesh.getObjectByName(part);
+    }    
 
     addMorph(target, vertices, code, type, sel_name){
         let morph_idx = this.scene.children.findIndex(obj => obj.name.includes("Blend"));
@@ -421,7 +462,7 @@ class App {
 
         let name = code + morph.morphPartsInfo[code].length;
         
-        if (!morph.morphTargetInfluences) this.initializeTargets(morph, name);
+        if (!morph.morphTargetInfluences) this.initializeMorphTargets(morph, name);
         else {
             morph.morphTargetDictionary[morph.morphTargetInfluences.length] = name;
             morph.morphTargetInfluences.push(0);
@@ -443,21 +484,57 @@ class App {
         return {mph: face, helper_sliders: helper_sliders};
     }
 
+    // Funció per modificar un array de posicions: modifica els vèrtexs en funció dels índexs
+    morphArray(source, target, indices, type) {
+        let parts_dict = {
+            "Nose": 3882,
+            "Chin": 3878,
+            "L_ear": 3847,
+            "R_ear": 1504,
+            "R_jaw": 1219,
+            "L_jaw": 4344,
+            "L_eye": 3048,
+            "R_eye": 904
+        };
+        
+        source = source.array;
+        target = target.array;
+        let final_dis = {};
+        
+        for (let i = 0; i < type.length; i++) {
+            const type_i = type[i];
+            const indices_i = indices[type_i];
+            let dis = this.getIdxDisp_simple(source, target, parts_dict[type_i]);
+            final_dis[type_i] = dis;
+            
+            for (let j = 0; j < indices_i.length; j++) {
+                const index = indices_i[j] * 3; // Utilitzem variable 'j' per evitar conflictes
+                source[index] = target[index] + dis.dx;
+                source[index + 1] = target[index + 1] + dis.dy;
+                source[index + 2] = target[index + 2] + dis.dz;
+            }
+        }
+        
+        return { res: source, dis: final_dis };
+    }
+
+    // Funció per calcular el desplaçament entre el source i target per un índex donat
+    getIdxDisp_simple(source, target, index) {
+        const i = index * 3;
+        return { 
+            dx: source[i] - target[i], 
+            dy: source[i + 1] - target[i + 1], 
+            dz: source[i + 2] - target[i + 2] 
+        };
+    }
+
+
     // End of funtions for INTERPOLATION between facial characteristics (morph targets)
 
     updateRendererSize() {
         const sidebarWidth = this.sidebar ? this.sidebar.offsetWidth : 0;
         this.renderer.setSize(window.innerWidth - sidebarWidth, window.innerHeight);
     }
-
-    /*
-    onWindowResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize( window.innerWidth, window.innerHeight );
-        this.render();
-    }
-    */
 
     render() {
         this.renderer.render( this.scene, this.camera );
