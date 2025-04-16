@@ -168,7 +168,14 @@ class App {
             img.addEventListener('click', async (event) => {
                 const templateData = this.templates[event.target.getAttribute("data-id")];
                 const template = await this.assignTemplate(templateData);
-                this.selectReferenceModel(template.id);
+                    
+                // Comprobar si ya existe en referenceModels
+                const alreadyLoaded = this.referenceModels.find(ref => ref.name === template.id);
+                if (!alreadyLoaded) {
+                    this.selectReferenceModel(template.id);
+                } else {
+                    console.log(`El modelo ${template.id} ya está cargado como referencia.`);
+                }
     
                 // Resaltar la imagen seleccionada
                 const allImages = referenceContainer.getElementsByTagName('img');
