@@ -64,16 +64,27 @@ class App {
     }
 
     async selectReferenceModel(modelId) {
-
-        this.loader.load('https://api.readyplayer.me/v2/avatars/'+modelId+'.glb', (gltf) => {
+        // Evitar cargar si ya existe en referenceModels
+        const alreadyLoaded = this.referenceModels.find(ref => ref.userData.modelId === modelId);
+        if (alreadyLoaded) {
+            console.log("Modelo de referencia ya cargado:", modelId);
+            this.createMorphTargets(alreadyLoaded);
+            return;
+        }
+    
+        this.loader.load('https://api.readyplayer.me/v2/avatars/' + modelId + '.glb', (gltf) => {
             const referenceModel = gltf.scene;
-
+            referenceModel.userData.modelId = modelId; // Guardamos el ID para evitar duplicados
+    
             this.referenceModels.push(referenceModel);
+    
+            // Generamos los morphTargets desde aquí
+            this.createMorphTargets(referenceModel);
+    
             console.log("Referencia agregada:", modelId);
-            //this.scene.add(referenceModel);
-            //this.render();
         });
     }
+    
 
     // Funció per crear la sidebar amb tres seccions desplegables: Interpolation, Recoloring i Wrinkle Maps.
     createSidebar() {
@@ -313,6 +324,32 @@ class App {
         this.render();
     }
 
+    //fn que genera los morph targets con los vértices del modelo de referencia -> para usar en loadAvatar() y en selectReferenceModel() 
+    createMorphTargets(referenceModel) {
+        const referenceHead = referenceModel.getObjectByName("Wolf3D_Head");
+        const visibleHead = this.visibleModel?.getObjectByName("Wolf3D_Head");
+    
+        if (!referenceHead || !visibleHead) {
+            console.warn("No se pudieron encontrar las mallas 'Wolf3D_Head' para crear morph targets.");
+            return;
+        }
+    
+        const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
+    
+        parts.forEach(part => {
+            if (this.verticesData[part]) {
+                this.addMorph(
+                    referenceHead,
+                    this.verticesData[part],
+                    part,
+                    [part],
+                    `Reference_${part}`
+                );
+            }
+        });
+    }
+    
+
     loadAvatar(id, preview) {
         this.loader.load('https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), (gltf) => {
             //model visible
@@ -321,30 +358,10 @@ class App {
             }
             this.visibleModel = gltf.scene;
             
-            // Buscar la malla de la cabeza
-            const headMesh = this.getPart(this.visibleModel, "Wolf3D_Head");
-            
-            if (headMesh && this.referenceModels.length > 0) {
-                // Obtener la malla de referencia
-                const referenceHead = this.getPart(this.referenceModels[0], "Wolf3D_Head");
-                
-                if (referenceHead) {
-                    // Añadir morph targets para cada parte
-                    const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
-                    parts.forEach(part => {
-                        if (this.verticesData[part]) {
-                            this.addMorph(
-                                referenceHead, 
-                                this.verticesData[part], 
-                                part, 
-                                [part], 
-                                `Reference_${part}`
-                            );
-                        }
-                    });
-                }
+            if (this.referenceModels.length > 0) {
+                this.createMorphTargets(this.referenceModels[0]);
             }
-            
+    
             this.render();
             return true;
         });
