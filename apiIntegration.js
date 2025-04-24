@@ -358,6 +358,8 @@ class App {
             }
             this.visibleModel = gltf.scene;
             
+            gltf.scene.getObjectByName("Wolf3D_Head").morphPartsInfo = {"Nose":[], "Chin": [], "Ears":[], "Jaw":[], "Eyes":[]}; //store each part which morphattribute it corresponds to 
+
             if (this.referenceModels.length > 0) {
                 this.createMorphTargets(this.referenceModels[0]);
             }
@@ -424,31 +426,34 @@ class App {
             this.initializeMorphTargets(morphMesh);
         }
 
-        let morphIndex = morphMesh.morphTargetDictionary[part];
-        if (morphIndex !== undefined) {
-            const sourceVertices = morphMesh.geometry.attributes.position.array.slice();
-            const targetMesh = this.referenceModels[0]; // Usa el primer modelo de referencia cargado
+
+        let morphIndex = morphMesh.morphTargetDictionary[part+ "0"];
+        morphMesh.morphTargetInfluences[morphIndex] = value;
+        this.render();
+        // if (morphIndex !== undefined) {
+        //     const sourceVertices = morphMesh.geometry.attributes.position.array.slice();
+        //     const targetMesh = this.referenceModels[0]; // Usa el primer modelo de referencia cargado
             
-            if (!targetMesh) {
-                console.warn("No hay modelo de referencia para interpolar");
-                return;
-            }
+        //     if (!targetMesh) {
+        //         console.warn("No hay modelo de referencia para interpolar");
+        //         return;
+        //     }
             
-            const targetVertices = targetMesh.geometry.attributes.position.array;
-            const affectedVertices = this.verticesData[part];
-            console.log(`Affected Vertices: ${affectedVertices}`);
+        //     const targetVertices = targetMesh.geometry.attributes.position.array;
+        //     const affectedVertices = this.verticesData[part];
+        //     console.log(`Affected Vertices: ${affectedVertices}`);
             
-            for (let i of affectedVertices) {
-                sourceVertices[i * 3] = (1 - value) * sourceVertices[i * 3] + value * targetVertices[i * 3];
-                sourceVertices[i * 3 + 1] = (1 - value) * sourceVertices[i * 3 + 1] + value * targetVertices[i * 3 + 1];
-                sourceVertices[i * 3 + 2] = (1 - value) * sourceVertices[i * 3 + 2] + value * targetVertices[i * 3 + 2];
-            }
-            //we update the mesh with the new vertices
-            morphMesh.geometry.attributes.position.setArray(sourceVertices); //crec que és el mateix però era per probar
-            //morphMesh.geometry.attributes.position.array = sourceVertices;
-            morphMesh.geometry.attributes.position.needsUpdate = true;
-            this.render();
-        }
+        //     for (let i of affectedVertices) {
+        //         sourceVertices[i * 3] = (1 - value) * sourceVertices[i * 3] + value * targetVertices[i * 3];
+        //         sourceVertices[i * 3 + 1] = (1 - value) * sourceVertices[i * 3 + 1] + value * targetVertices[i * 3 + 1];
+        //         sourceVertices[i * 3 + 2] = (1 - value) * sourceVertices[i * 3 + 2] + value * targetVertices[i * 3 + 2];
+        //     }
+        //     //we update the mesh with the new vertices
+        //     morphMesh.geometry.attributes.position.setArray(sourceVertices); //crec que és el mateix però era per probar
+        //     //morphMesh.geometry.attributes.position.array = sourceVertices;
+        //     morphMesh.geometry.attributes.position.needsUpdate = true;
+        //     this.render();
+        // }
     }
 
     /*getPart(mesh, part) {
@@ -475,9 +480,10 @@ class App {
     }    
 
     addMorph(target, vertices, code, type, sel_name){
-        let morph_idx = this.scene.children.findIndex(obj => obj.name.includes("Blend"));
-        let morph = this.scene.children[morph_idx];
-        morph = this.getPart(morph, "Wolf3D_Head");
+        // let morph_idx = this.scene.children.findIndex(obj => obj.name.includes("Blend"));
+        // let morph = this.scene.children[morph_idx];
+        // morph = this.getPart(morph, "Wolf3D_Head");
+        const morph = this.scene.getObjectByName("Wolf3D_Head");
         let face = morph;
 
         let source_p = new THREE.Float32BufferAttribute(morph.geometry.attributes.position.array, 3);
@@ -488,7 +494,7 @@ class App {
         
         if (!morph.morphTargetInfluences) this.initializeMorphTargets(morph, name);
         else {
-            morph.morphTargetDictionary[morph.morphTargetInfluences.length] = name;
+            morph.morphTargetDictionary[name] = morph.morphTargetInfluences.length;
             morph.morphTargetInfluences.push(0);
         }
         
@@ -497,14 +503,19 @@ class App {
         let mixed_p = combined.res;
         let mt_p = new THREE.Float32BufferAttribute(mixed_p, 3);
 
-        morph.geometry.morphAttributes.position.push(mt_p);
+        if(!morph.geometry.morphAttributes.normal) {
+            morph.geometry.morphAttributes.normal = [];
+            morph.geometry.morphAttributes.normal.length = morph.geometry.morphAttributes.position.length;
+            morph.geometry.morphAttributes.normal.fill(source_n);
+        }
+        morph.geometry.morphAttributes.position.push(source_p);
         morph.geometry.morphAttributes.normal.push(source_n);
 
-        morph = this.scene.children[morph_idx];
+        // morph = this.scene.children[morph_idx];
         let helper_sliders;
 
-        this.scene.remove(morph);
-        this.scene.add(morph);
+        // this.scene.remove(morph);
+        // this.scene.add(morph);
         return {mph: face, helper_sliders: helper_sliders};
     }
 
@@ -525,11 +536,11 @@ class App {
         target = target.array;
         let final_dis = {};
         
-        for (let i = 0; i < type.length; i++) {
-            const type_i = type[i];
-            const indices_i = indices[type_i];
-            let dis = this.getIdxDisp_simple(source, target, parts_dict[type_i]);
-            final_dis[type_i] = dis;
+        for (let i in indices) {
+            // const type_i = type[i];
+            const indices_i = indices[i];
+            let dis = {dx: 0, dy: 0, dz:0 };//this.getIdxDisp_simple(source, target, parts_dict[type_i]);
+            final_dis[i] = dis;
             
             for (let j = 0; j < indices_i.length; j++) {
                 const index = indices_i[j] * 3; // Utilitzem variable 'j' per evitar conflictes
