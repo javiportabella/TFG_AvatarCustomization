@@ -18,6 +18,7 @@ class App {
         this.referenceModels = []; // Store reference models for interpolation
         this.verticesData = null; // Store verticesGlobal.json data
         this.preloadAvatarTemplates = [];
+        this.debug = false; // Debug mode
     }
 
     // Initialize the application
@@ -34,6 +35,9 @@ class App {
             this.templates = await this.getAllTemplates();
             this.verticesData = await this.loadVerticesData(); //Load the JSON file with the vertices data
             const htmlContainer = document.getElementById("images-container");
+            const urlParams = new URLSearchParams(window.location.search);
+            this.debug = urlParams.get("debug");
+
             for(let i = 0; i < this.templates.length; i++) {
                 const div = document.createElement("div");
                 const img = document.createElement("img");
@@ -333,6 +337,15 @@ class App {
             }
             this.visibleModel = gltf.scene;
             
+            /*// Recorremos todos los meshes y configuramos morphTargets (pero NO morphNormals)
+            this.visibleModel.traverse((child) => {
+                if (child.isMesh) {
+                child.material.morphTargets = true;
+                child.material.morphNormals = false;
+                child.material.needsUpdate = true;
+                }
+            });*/
+
             gltf.scene.getObjectByName("Wolf3D_Head").morphPartsInfo = {"Nose":[], "Chin": [], "Ears":[], "Jaw":[], "Eyes":[]}; //store each part which morphattribute it corresponds to 
 
             if (this.referenceModels.length > 0) {
@@ -384,7 +397,6 @@ class App {
                     referenceHead,
                     this.verticesData[part],
                     part,
-                    [part],
                     `Reference_${part}`
                 );
             }
@@ -433,87 +445,107 @@ class App {
         }
 
 
-        let morphIndex = morphMesh.morphTargetDictionary[part + "0"];
+        const morphIndex = morphMesh.morphTargetDictionary[part + "0"];
         morphMesh.morphTargetInfluences[morphIndex] = value;
+
+        morphMesh.geometry.attributes.position.needsUpdate = true;
+        morphMesh.geometry.computeVertexNormals();
+
         this.render();
     } 
 
     // Add a new morph target to the head mesh
-    addMorph(target, vertices, code, type, sel_name){
+    addMorph(target, vertices, code, sel_name){
         const morph = this.scene.getObjectByName("Wolf3D_Head");
-        let face = morph;
 
-        let source_p = new THREE.Float32BufferAttribute(morph.geometry.attributes.position.array, 3);
-        let source_n = new THREE.Float32BufferAttribute(morph.geometry.attributes.normal.array, 3);
-        let target_p = new THREE.Float32BufferAttribute(target.geometry.attributes.position.array, 3);
+        // Get base attributes
+        const sourceAttr = morph.geometry.attributes.position;
+        const targetAttr = target.geometry.attributes.position;
+
+        // Extract flat arrays
+        const sourceArray = sourceAttr.array.slice(); // clone to modify
+        const targetArray = targetAttr.array;
+
+        const stride = sourceAttr.data.stride;
+
+        // Generate new morphed array from source + target at selected vertices
+        const { res: mixed_p } = this.morphArray(sourceArray, targetArray, vertices, stride);
 
         let name = code + morph.morphPartsInfo[code].length;
         
         if (!morph.morphTargetInfluences) this.initializeMorphTargets(morph, name);
-        else {
-            morph.morphTargetDictionary[name] = morph.morphTargetInfluences.length;
-            morph.morphTargetInfluences.push(0);
+        morph.morphTargetDictionary[name] = morph.morphTargetInfluences.length;
+        morph.morphTargetInfluences.push(0);
+
+        // Store the info about which part this morph belongs to
+        morph.morphPartsInfo[code].push({ id: morph.morphTargetInfluences.length - 1, character: sel_name });
+
+        // Create a new Float32BufferAttribute for the interpolated positions
+        const mt_p = new THREE.Float32BufferAttribute(mixed_p, 3);
+
+        // Ensure normals array is ready
+        if (!morph.geometry.morphAttributes.normal) {
+            morph.geometry.morphAttributes.normal = [];
         }
         
-        morph.morphPartsInfo[code].push({id : morph.morphTargetInfluences.length, character: sel_name});
-        let combined = this.morphArray(source_p, target_p, vertices, type);
-        let mixed_p = combined.res;
-        let mt_p = new THREE.Float32BufferAttribute(mixed_p, 3);
+        // Add the newly generated morph target
+        morph.geometry.morphAttributes.position.push(mt_p);
+        const baseNormals = morph.geometry.attributes.normal.array.slice();
+        const mt_n = new THREE.Float32BufferAttribute(baseNormals, 3);
+        morph.geometry.morphAttributes.normal.push(mt_n);
 
-        if(!morph.geometry.morphAttributes.normal) {
-            morph.geometry.morphAttributes.normal = [];
-            morph.geometry.morphAttributes.normal.length = morph.geometry.morphAttributes.position.length;
-            morph.geometry.morphAttributes.normal.fill(source_n);
+        // debug
+        if (this.debug) {
+            let geometry = new THREE.BufferGeometry();
+            geometry.setAttribute( 'position', morph.geometry.attributes.position);
+            console.log("Morph:", morph.geometry.getIndex());
+            geometry.setIndex(morph.geometry.getIndex());
+            let material = new THREE.MeshStandardMaterial( { color: "green", wireframe: true } );
+            let mesh = new THREE.Mesh( geometry, material );
+            mesh.position.x = 0.5;
+            mesh.name = "source";
+            this.scene.add(mesh);
+    
+            const geometry_t = new THREE.BufferGeometry();
+            geometry_t.setAttribute( 'position', target.geometry.attributes.position);
+            console.log("Target:", target.geometry.getIndex());
+            geometry_t.setIndex(target.geometry.getIndex());
+    
+            const material_t = new THREE.MeshStandardMaterial( { color: "red", wireframe: true } );
+            mesh = new THREE.Mesh( geometry_t, material_t );
+            mesh.position.x = 0.8;
+            mesh.name = "target";
+            this.scene.add(mesh);
+    
+            const geometry_r = new THREE.BufferGeometry();
+            geometry_r.setAttribute( 'position', mt_p);
+            geometry_r.setIndex(morph.geometry.getIndex());
+            const material_r = new THREE.MeshStandardMaterial( { color: "blue", wireframe: true } );
+            mesh = new THREE.Mesh( geometry_r, material_r );
+            mesh.position.x = 0.5;
+            mesh.name = "result";
+            this.scene.add(mesh);
         }
-        morph.geometry.morphAttributes.position.push(source_p);
-        morph.geometry.morphAttributes.normal.push(source_n);
 
         let helper_sliders;
 
-        return {mph: face, helper_sliders: helper_sliders};
+        return {mph: morph, helper_sliders: helper_sliders};
     }
 
     // Generate a morph array combining source and target vertices
-    morphArray(source, target, indices, type) {
-        let parts_dict = {
-            "Nose": 3882,
-            "Chin": 3878,
-            "L_ear": 3847,
-            "R_ear": 1504,
-            "R_jaw": 1219,
-            "L_jaw": 4344,
-            "L_eye": 3048,
-            "R_eye": 904
-        };
-        
-        source = source.array;
-        target = target.array;
-        let final_dis = {};
-        
-        for (let i in indices) {
-            const indices_i = indices[i];
-            let dis = {dx: 0, dy: 0, dz:0 };
-            final_dis[i] = dis;
-            
-            for (let j = 0; j < indices_i.length; j++) {
-                const index = indices_i[j] * 3; // We use 'j' to avoid conflicts
-                source[index] = target[index] + dis.dx;
-                source[index + 1] = target[index + 1] + dis.dy;
-                source[index + 2] = target[index + 2] + dis.dz;
+    morphArray(source, target, indices, stride) {
+        const result = source.slice(); // copy of base to be morphed
+    
+        for (const part in indices) {
+            const partIndices = indices[part];
+            for (let i = 0; i < partIndices.length; i++) {
+                const idx = partIndices[i] * stride;
+                result[idx] = target[idx];
+                result[idx + 1] = target[idx + 1];
+                result[idx + 2] = target[idx + 2];
             }
         }
-        
-        return { res: source, dis: final_dis };
-    }
-
-    // This function is used to calculate the displacement between two vertices of the source and target for a given index
-    getIdxDisp_simple(source, target, index) {
-        const i = index * 3;
-        return { 
-            dx: source[i] - target[i], 
-            dy: source[i + 1] - target[i + 1], 
-            dz: source[i + 2] - target[i + 2] 
-        };
+        return { res: result, dis: null };
     }
 
 }
