@@ -463,13 +463,13 @@ class App {
         const targetAttr = target.geometry.attributes.position;
 
         // Extract flat arrays
-        const sourceArray = sourceAttr.array.slice(); // clone to modify
-        const targetArray = targetAttr.array;
+        //const sourceArray = sourceAttr.array.slice(); // clone to modify
+        //const targetArray = targetAttr.array;
 
         const stride = sourceAttr.data.stride;
 
         // Generate new morphed array from source + target at selected vertices
-        const { res: mixed_p } = this.morphArray(sourceArray, targetArray, vertices, stride);
+        const { res: delta_p } = this.morphArray(sourceAttr, targetAttr, vertices, stride);
 
         let name = code + morph.morphPartsInfo[code].length;
         
@@ -481,7 +481,7 @@ class App {
         morph.morphPartsInfo[code].push({ id: morph.morphTargetInfluences.length - 1, character: sel_name });
 
         // Create a new Float32BufferAttribute for the interpolated positions
-        const mt_p = new THREE.Float32BufferAttribute(mixed_p, 3);
+        const mt_p = new THREE.Float32BufferAttribute(delta_p, 3);
 
         // Ensure normals array is ready
         if (!morph.geometry.morphAttributes.normal) {
@@ -490,9 +490,9 @@ class App {
         
         // Add the newly generated morph target
         morph.geometry.morphAttributes.position.push(mt_p);
-        const baseNormals = morph.geometry.attributes.normal.array.slice();
-        const mt_n = new THREE.Float32BufferAttribute(baseNormals, 3);
-        morph.geometry.morphAttributes.normal.push(mt_n);
+
+        morph.geometry.morphAttributes.normal.push(new THREE.Float32BufferAttribute(new Float32Array(delta_p.length).fill(0), 3));
+
 
         // debug
         if (this.debug) {
@@ -527,25 +527,32 @@ class App {
             this.scene.add(mesh);
         }
 
-        let helper_sliders;
-
-        return {mph: morph, helper_sliders: helper_sliders};
+        return {mph: morph, helper_sliders: null};
     }
 
     // Generate a morph array combining source and target vertices
-    morphArray(source, target, indices, stride) {
-        const result = source.slice(); // copy of base to be morphed
+    morphArray(source, target, vertices, stride) {
+        //const sourceArray = source.array.slice(); // clone to modify
+        //const targetArray = target.array;
+        const count = source.count;
+        const deltaArray = new Float32Array(count * stride).fill(0);
     
-        for (const part in indices) {
-            const partIndices = indices[part];
-            for (let i = 0; i < partIndices.length; i++) {
-                const idx = partIndices[i] * stride;
-                result[idx] = target[idx];
-                result[idx + 1] = target[idx + 1];
-                result[idx + 2] = target[idx + 2];
+        for (let i = 0; i < Object.keys(vertices).length; i++) {
+            const indexArray = Object.entries(vertices)[i][1];
+    
+            for (let j = 0; j < indexArray.length; j++) {
+                const index = indexArray[j];
+    
+                const si = index * stride;
+                //deltaArray[si]     = targetArray[si]     - sourceArray[si];
+                //deltaArray[si + 1] = targetArray[si + 1] - sourceArray[si + 1];
+                //deltaArray[si + 2] = targetArray[si + 2] - sourceArray[si + 2];
+                deltaArray[si]     = target.getX(index) - source.getX(index);
+                deltaArray[si + 1] = target.getY(index) - source.getY(index);
+                deltaArray[si + 2] = target.getZ(index) - source.getZ(index);
             }
         }
-        return { res: result, dis: null };
+        return { res: deltaArray, dis: null };
     }
 
 }
