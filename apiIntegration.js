@@ -336,16 +336,6 @@ class App {
                 this.scene.add(gltf.scene);
             }
             this.visibleModel = gltf.scene;
-            
-            /*// Recorremos todos los meshes y configuramos morphTargets (pero NO morphNormals)
-            this.visibleModel.traverse((child) => {
-                if (child.isMesh) {
-                child.material.morphTargets = true;
-                child.material.morphNormals = false;
-                child.material.needsUpdate = true;
-                }
-            });*/
-
             gltf.scene.getObjectByName("Wolf3D_Head").morphPartsInfo = {"Nose":[], "Chin": [], "Ears":[], "Jaw":[], "Eyes":[]}; //store each part which morphattribute it corresponds to 
 
             if (this.referenceModels.length > 0) {
@@ -462,10 +452,6 @@ class App {
         const sourceAttr = morph.geometry.attributes.position;
         const targetAttr = target.geometry.attributes.position;
 
-        // Extract flat arrays
-        //const sourceArray = sourceAttr.array.slice(); // clone to modify
-        //const targetArray = targetAttr.array;
-
         const stride = sourceAttr.data.stride;
 
         // Generate new morphed array from source + target at selected vertices
@@ -481,17 +467,13 @@ class App {
         morph.morphPartsInfo[code].push({ id: morph.morphTargetInfluences.length - 1, character: sel_name });
 
         // Create a new Float32BufferAttribute for the interpolated positions
-        const mt_p = new THREE.Float32BufferAttribute(delta_p, 3);
-
-        // Ensure normals array is ready
-        if (!morph.geometry.morphAttributes.normal) {
-            morph.geometry.morphAttributes.normal = [];
-        }
+        const mt_p = new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(delta_p,stride), 3, 0);
         
         // Add the newly generated morph target
         morph.geometry.morphAttributes.position.push(mt_p);
 
-        morph.geometry.morphAttributes.normal.push(new THREE.Float32BufferAttribute(new Float32Array(delta_p.length).fill(0), 3));
+        //const mt_n = new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(new Float32Array(delta_p.length).fill(0),stride), 3, 0);
+        //morph.geometry.morphAttributes.normal.push(mt_n); //We do not need to add the normals, as we are working with InterleavedBufferAttributes and there is no need to recalculate them
 
 
         // debug
@@ -532,28 +514,23 @@ class App {
 
     // Generate a morph array combining source and target vertices
     morphArray(source, target, vertices, stride) {
-        //const sourceArray = source.array.slice(); // clone to modify
-        //const targetArray = target.array;
-        const count = source.count;
+        const sourceArray = source.array;
+        const targetArray = target.array;
+        const count = source.count; // Number of vertices in the geometry
+    
         const deltaArray = new Float32Array(count * stride).fill(0);
     
-        for (let i = 0; i < Object.keys(vertices).length; i++) {
-            const indexArray = Object.entries(vertices)[i][1];
-    
-            for (let j = 0; j < indexArray.length; j++) {
-                const index = indexArray[j];
-    
-                const si = index * stride;
-                //deltaArray[si]     = targetArray[si]     - sourceArray[si];
-                //deltaArray[si + 1] = targetArray[si + 1] - sourceArray[si + 1];
-                //deltaArray[si + 2] = targetArray[si + 2] - sourceArray[si + 2];
-                deltaArray[si]     = target.getX(index) - source.getX(index);
-                deltaArray[si + 1] = target.getY(index) - source.getY(index);
-                deltaArray[si + 2] = target.getZ(index) - source.getZ(index);
+        for (const indexArray of Object.values(vertices)) {
+            for (const index of indexArray) {
+                const offset = index * stride; // Calculate the offset for the vertex
+                for (let k = 0; k < stride; k++) {
+                    deltaArray[offset + k] = targetArray[offset + k] - sourceArray[offset + k];
+                }
             }
         }
+    
         return { res: deltaArray, dis: null };
-    }
+    }    
 
 }
 
