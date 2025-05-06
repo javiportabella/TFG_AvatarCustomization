@@ -48,15 +48,27 @@ class App {
                 htmlContainer.appendChild(div);
 
                 div.addEventListener("click", async (event) => {
-                    // We use the data-id attribute to get the index of the template 
-                    // and then we get the template data from the templates array
-                    const templateData = this.templates[event.target["data-id"]];
-                    const template = await this.assignTemplate(templateData);
-                    if(template) {
-                        this.loadAvatar(template.id, "preview");
-                        htmlContainer.classList.add("hidden");
+                    // Show loading
+                    const loadingElement = document.getElementById("loading");
+                    loadingElement.classList.remove("hidden");
+                
+                    try {
+                        // We use the data-id attribute to get the index of the template 
+                        // and then we get the template data from the templates array
+                        const templateData = this.templates[event.target["data-id"]];
+                        const template = await this.assignTemplate(templateData);
+                        if (template) {
+                            await this.loadAvatar(template.id, "preview");
+                            htmlContainer.classList.add("hidden");
+                        }
+                    } catch (error) {
+                        console.error("Error loading avatar:", error);
+                    } finally {
+                        // Hide loading
+                        loadingElement.classList.add("hidden");
                     }
-                })
+                });
+                
                 
             }
             htmlContainer.classList.remove("hidden");
