@@ -512,6 +512,22 @@ class App {
         return {mph: morph, helper_sliders: null};
     }
 
+    // Compute the center of a vertex array
+    // This function is used to calculate the center of the vertices in the geometry to obtain the relative position of the morph targets
+    computeCenter(array, stride) {
+        const center = new THREE.Vector3();
+        const count = array.length / stride;
+    
+        for (let i = 0; i < array.length; i += stride) {
+            center.x += array[i];
+            center.y += array[i + 1];
+            center.z += array[i + 2];
+        }
+        center.divideScalar(count);
+        return center;
+    }
+    
+
     // Generate a morph array combining source and target vertices
     morphArray(source, target, vertices, stride) {
         const sourceArray = source.array;
@@ -519,12 +535,31 @@ class App {
         const count = source.count; // Number of vertices in the geometry
     
         const deltaArray = new Float32Array(count * stride).fill(0);
+
+        // Compute the center of the source and target arrays as a reference point
+        const sourceCenter = this.computeCenter(sourceArray, stride);
+        const targetCenter = this.computeCenter(targetArray, stride);
     
         for (const indexArray of Object.values(vertices)) {
             for (const index of indexArray) {
-                const offset = index * stride; // Calculate the offset for the vertex
-                for (let k = 0; k < stride; k++) {
-                    deltaArray[offset + k] = targetArray[offset + k] - sourceArray[offset + k];
+                const i = index * stride; // Calculate the offset for the vertex
+                
+                // POSICIÓN (relativa al centro)
+                const sx = sourceArray[i]     - sourceCenter.x;
+                const sy = sourceArray[i + 1] - sourceCenter.y;
+                const sz = sourceArray[i + 2] - sourceCenter.z;
+
+                const tx = targetArray[i]     - targetCenter.x;
+                const ty = targetArray[i + 1] - targetCenter.y;
+                const tz = targetArray[i + 2] - targetCenter.z;
+
+                deltaArray[i]     = tx - sx;
+                deltaArray[i + 1] = ty - sy;
+                deltaArray[i + 2] = tz - sz;
+
+                // RESTO DEL STRIDE: diferencia directa
+                for (let j = 3; j < stride; j++) {
+                    deltaArray[i + j] = targetArray[i + j] - sourceArray[i + j];
                 }
             }
         }
