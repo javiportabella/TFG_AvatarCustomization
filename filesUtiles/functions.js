@@ -272,7 +272,7 @@ class GUI {
     constructor(app) {
         this.app = app; // Referencia a la instancia de App
         this.sidebar = null;
-        this.initGUI();
+        //this.initGUI();
     }
 
     initGUI() {
@@ -286,7 +286,7 @@ class GUI {
         this.sidebar.style.overflow = 'auto';
         document.body.appendChild(this.sidebar);
 
-        this.createInterpolationSliders();
+        //this.createInterpolationSliders();
     }
 
     createInterpolationSliders() {

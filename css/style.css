@@ -41,6 +41,26 @@ body{
     100% { transform: rotate(360deg); }
 }  
 
+#back-button {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    font-size: 2rem;
+    padding: 3px 6px;
+    border: none;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    cursor: pointer;
+    z-index: 150;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+    transition: background-color 0.3s ease;
+  }
+  
+  #back-button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+  }  
+
 .title{
     position: absolute; /* titol a sobre del canvas */
     transform: translateX(-50%);
@@ -84,3 +104,36 @@ canvas {
     background-color: rgb(255, 255, 255);
     color: rgba(30, 30, 30, 0.5);
 }
+
+.color-swatch {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    margin: 4px;
+    display: inline-block;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 0 3px rgba(0,0,0,0.5);
+  }
+  
+.recoloring-toggle summary {
+    font-weight: bold;
+    background: white;
+    color: black;
+    padding: 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+  
+.recoloring-toggle[open] summary {
+    background: #f0f0f0;
+}
+  
+.color-container {
+    margin-top: 10px;
+    padding: 5px 10px;
+}
+  

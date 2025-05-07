@@ -1,5 +1,3 @@
-import { GUI } from "./gui.js";
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -12,7 +10,6 @@ let TOKEN = null;
 class App {
     constructor(){
         // Initialize properties
-        this.gui = new GUI();
         this.loader = new GLTFLoader();
         this.templates = null;
         this.referenceModels = []; // Store reference models for interpolation
@@ -72,13 +69,31 @@ class App {
                 
             }
             htmlContainer.classList.remove("hidden");
+            document.getElementById("back-button").classList.remove("hidden");
             if (this.templates) {
                 this.createSidebar();
             } else {
                 console.error("Error: Could not load avatar templates.");
             }
         }
-        
+        // Configurar el botón de retroceso para reiniciar la app
+        const backButton = document.getElementById("back-button");
+        backButton.onclick = () => {
+            // Limpiar la escena si ya está inicializada
+            if (this.scene && typeof this.scene.clear === "function") {
+                this.scene.clear();
+            }
+
+            // Limpiar el contenedor de imágenes
+            const container = document.getElementById("images-container");
+            container.innerHTML = "";
+
+            // Ocultar el botón
+            backButton.classList.add("hidden");
+
+            // Reiniciar la app
+            this.init();
+        };
     }
 
     // Create an anonymous user to get access token
@@ -330,9 +345,7 @@ class App {
     
         // ====== RECOLORING ======
         const recoloringContent = createDropdown('Recoloring');
-        const recoloringText = document.createElement('p');
-        recoloringText.innerText = 'Opciones de recoloring aquí...';
-        recoloringContent.appendChild(recoloringText);
+        this.createRecoloringPanel(recoloringContent);
     
         // ====== WRINKLE MAPS ======
         const wrinkleContent = createDropdown('Wrinkle Maps');
@@ -537,8 +550,7 @@ class App {
         }
         center.divideScalar(count);
         return center;
-    }
-    
+    } 
 
     // Generate a morph array combining source and target vertices
     morphArray(source, target, vertices, stride) {
@@ -577,7 +589,114 @@ class App {
         }
     
         return { res: deltaArray, dis: null };
-    }    
+    }  
+    
+    // Function to handle recoloring
+    createRecoloringPanel(container) {
+        const parts = [
+            {
+                name: "Skin",
+                objectName1: "Wolf3D_Head",
+                objectName2: "Wolf3D_Body",
+                colors: ["#f4c1a1", "#d4a17a", "#e0ac69", "#c68642", "#8d5524"]
+            },
+            {
+                name: "Eyes",
+                objectName1: "EyeLeft",
+                objectName2: "EyeRight",
+                colors: ["#1c4d9b", "#6a994e", "#8d5524", "#5e503f", "#000000"]
+            },
+            {
+                name: "Hair",
+                objectName: "Wolf3D_Hair",
+                colors: ["#000000", "#774936", "#b87333", "#d4af37", "#ffffff"]
+            },
+            {
+                name: "Top",
+                objectName: "Wolf3D_Outfit_Top",
+                colors: ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"]
+            },
+            {
+                name: "Bottom",
+                objectName: "Wolf3D_Outfit_Bottom",
+                colors: ["#5f5f5f", "#9e2a2b", "#4361ee", "#f4a261", "#e76f51"]
+            },
+            {
+                name: "Shoes",
+                objectName: "Wolf3D_Outfit_Footwear",
+                colors: ["#000000", "#ffffff", "#8d99ae", "#2b2d42", "#ef233c"]
+            }
+        ];
+    
+        container.innerHTML = ""; // Clear previous
+    
+        parts.forEach(part => {
+            const section = document.createElement("div");
+            section.classList.add("recoloring-section");
+    
+            const toggle = document.createElement("details");
+            toggle.classList.add("recoloring-toggle");
+    
+            const summary = document.createElement("summary");
+            summary.innerHTML = `<span>${part.name}</span> <span class="arrow">▼</span>`;
+            toggle.appendChild(summary);
+    
+            const colorContainer = document.createElement("div");
+            colorContainer.className = "color-container";
+    
+            // Swatches
+            part.colors.forEach(color => {
+                const swatch = document.createElement("div");
+                swatch.className = "color-swatch";
+                swatch.style.backgroundColor = color;
+                swatch.addEventListener("click", () => this.applyColorToPart(part, color));
+                colorContainer.appendChild(swatch);
+            });
+    
+            // Custom color picker
+            const pickerLabel = document.createElement("label");
+            pickerLabel.innerText = "Personalized color:  ";
+            pickerLabel.style.display = "block";
+            pickerLabel.style.marginTop = "8px";
+            pickerLabel.style.fontSize = "12px";
+    
+            const colorInput = document.createElement("input");
+            colorInput.type = "color";
+            colorInput.addEventListener("input", (e) => this.applyColorToPart(part, e.target.value));
+    
+            pickerLabel.appendChild(colorInput);
+            colorContainer.appendChild(pickerLabel);
+    
+            toggle.appendChild(colorContainer);
+            section.appendChild(toggle);
+            container.appendChild(section);
+    
+            // Flecha animada
+            summary.addEventListener("click", () => {
+                setTimeout(() => {
+                    const arrow = summary.querySelector(".arrow");
+                    arrow.textContent = toggle.open ? "▲" : "▼";
+                }, 100);
+            });
+        });
+    }
+    
+    // Utilidad para aplicar color
+    applyColorToPart(part, color) {
+        if (part.objectName) {
+            const mesh = this.scene.getObjectByName(part.objectName);
+            if (mesh) mesh.material.color.set(color);
+        } else if (part.objectName1 && part.objectName2) {
+            const meshL = this.scene.getObjectByName(part.objectName1);
+            const meshR = this.scene.getObjectByName(part.objectName2);
+            if (meshL) meshL.material.color.set(color);
+            if (meshR) meshR.material.color.set(color);
+        }
+        this.renderer.render(this.scene, this.camera);
+
+    }
+    
+    
 
 }
 
