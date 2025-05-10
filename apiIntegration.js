@@ -16,6 +16,9 @@ class App {
         this.verticesData = null; // Store verticesGlobal.json data
         this.preloadAvatarTemplates = [];
         this.debug = false; // Debug mode
+        this.maskEyeTexture = new THREE.TextureLoader().load("models/maskEye.png");
+        this.originalEyeTextureL = null;
+        this.originalEyeTextureR = null;
     }
 
     // Initialize the application
@@ -272,83 +275,15 @@ class App {
         };
     
         // ====== INTERPOLATION ======
-        const interpolationContent = createDropdown('Interpolation');
-    
-        // Sliders
-        const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
-        parts.forEach(part => {
-            let label = document.createElement('label');
-            label.innerText = `${part}`;
-            label.style.color = 'black';
-            label.style.margin = '4%';
-    
-            let slider = document.createElement('input');
-            slider.type = 'range';
-            slider.style.width = '100%';
-            slider.min = 0;
-            slider.max = 1;
-            slider.step = 0.01;
-            slider.value = 0;
-    
-            slider.addEventListener('input', (event) => {
-                this.updateMorphTarget(part, parseFloat(event.target.value));
-            });
-    
-            interpolationContent.appendChild(label);
-            interpolationContent.appendChild(slider);
-        });
-    
-        // Container for reference models
-        const referenceContainer = document.createElement('div');
-        referenceContainer.style.display = 'grid';
-        referenceContainer.style.gridTemplateColumns = 'repeat(3, 1fr)';
-        referenceContainer.style.gap = '10px';
-        referenceContainer.style.marginTop = '10px';
-        interpolationContent.appendChild(referenceContainer);
-    
-        this.templates.forEach((template, index) => {
-            const div = document.createElement("div");
-            const img = document.createElement("img");
-            img.src = template.imageUrl;
-            img.style.width = "100%";
-            img.style.height = '80px';
-            img.style.objectFit = 'cover';
-            img.style.cursor = "pointer";
-            img.setAttribute("data-id", index);
-    
-            img.addEventListener('click', async (event) => {
-                const templateData = this.templates[event.target.getAttribute("data-id")];
-                const template = await this.assignTemplate(templateData);
-                    
-                // Check if it already exists in referenceModels
-                const alreadyLoaded = this.referenceModels.find(ref => ref.name === template.id);
-                if (!alreadyLoaded) {
-                    this.selectReferenceModel(template.id);
-                } else {
-                    console.log(`El modelo ${template.id} ya está cargado como referencia.`);
-                }
-    
-                // Highlight the selected image
-                const allImages = referenceContainer.getElementsByTagName('img');
-                Array.from(allImages).forEach(image => {
-                    image.style.border = '';
-                    image.style.borderRadius = '';
-                });
-    
-                img.style.border = '4px solid rgb(16, 70, 120)';
-                img.style.borderRadius = '12px';
-            });
-    
-            div.appendChild(img);
-            referenceContainer.appendChild(div);
-        });
+        const interpolationContent = createDropdown('INTERPOLATION');
+        this.createInterpolationPanel(interpolationContent);
     
         // ====== RECOLORING ======
-        const recoloringContent = createDropdown('Recoloring');
+        const recoloringContent = createDropdown('RECOLORING');
         this.createRecoloringPanel(recoloringContent);
     
         // ====== WRINKLE MAPS ======
-        const wrinkleContent = createDropdown('Wrinkle Maps');
+        const wrinkleContent = createDropdown('WRINKLE MAPS');
         const wrinkleText = document.createElement('p');
         wrinkleText.innerText = 'Opciones de wrinkle maps aquí...';
         wrinkleContent.appendChild(wrinkleText);
@@ -366,9 +301,108 @@ class App {
             if (this.referenceModels.length > 0) {
                 this.createMorphTargets(this.referenceModels[0]);
             }
-    
+            const eyeL = this.scene.getObjectByName("EyeLeft");
+            const eyeR = this.scene.getObjectByName("EyeRight");
+
+            if (eyeL && eyeR) {
+                this.originalEyeTextureL = eyeL.material.map;
+                this.originalEyeTextureR = eyeR.material.map;
+            }
+
             this.render();
             return true;
+        });
+    }
+
+    createInterpolationPanel(container) {
+        const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
+
+        container.innerHTML = ""; // Clear old content
+
+        parts.forEach(part => {
+            const section = document.createElement("div");
+            section.classList.add("interpolation-section");
+
+            const toggle = document.createElement("details");
+            toggle.classList.add("toggle");
+
+            const summary = document.createElement("summary");
+            summary.innerHTML = `<span>${part}</span> <span class="arrow">▼</span>`;
+            toggle.appendChild(summary);
+
+            const innerContent = document.createElement("div");
+            innerContent.className = "interpolation-content";
+
+            // Slider
+            const slider = document.createElement("input");
+            slider.type = "range";
+            slider.min = 0;
+            slider.max = 1;
+            slider.step = 0.01;
+            slider.value = 0;
+            slider.style.width = "100%";
+            slider.addEventListener("input", (e) => {
+                this.updateMorphTarget(part, parseFloat(e.target.value));
+            });
+
+            innerContent.appendChild(slider);
+
+            // Template thumbnails
+            const templateGrid = document.createElement("div");
+            templateGrid.className = "reference-grid";
+            templateGrid.style.display = 'grid';
+            templateGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            templateGrid.style.gap = '10px';
+            templateGrid.style.marginTop = '10px';
+
+            this.templates.forEach((template, index) => {
+                const div = document.createElement("div");
+                const img = document.createElement("img");
+                img.src = template.imageUrl;
+                img.className = "model-img";
+                img.style.width = "100%";
+                img.style.height = '80px';
+                img.style.objectFit = 'cover';
+                img.style.cursor = "pointer";
+                img.setAttribute("data-id", index);
+
+                img.addEventListener("click", async (event) => {
+                    const templateData = this.templates[event.target.getAttribute("data-id")];
+                    const templateResult = await this.assignTemplate(templateData);
+
+                    const alreadyLoaded = this.referenceModels.find(ref => ref.name === templateResult.id);
+                    if (!alreadyLoaded) {
+                        this.selectReferenceModel(templateResult.id);
+                    } else {
+                        console.log(`El modelo ${templateResult.id} ya está cargado como referencia.`);
+                    }
+
+                    // Visually highlight selected image
+                    Array.from(templateGrid.getElementsByTagName('img')).forEach(image => {
+                        image.style.border = '';
+                        image.style.borderRadius = '';
+                    });
+
+                    img.style.border = '4px solid rgb(16, 70, 120)';
+                    img.style.borderRadius = '12px';
+                });
+
+                div.appendChild(img);
+                templateGrid.appendChild(div);
+            });
+
+            innerContent.appendChild(templateGrid);
+            toggle.appendChild(innerContent);
+            section.appendChild(toggle);
+            container.appendChild(section);
+
+            // Flecha animada
+            summary.addEventListener("click", () => {
+                setTimeout(() => {
+                    const arrow = summary.querySelector(".arrow");
+                    arrow.textContent = toggle.open ? "▲" : "▼";
+                }, 100);
+            });
         });
     }
 
@@ -598,33 +632,33 @@ class App {
                 name: "Skin",
                 objectName1: "Wolf3D_Head",
                 objectName2: "Wolf3D_Body",
-                colors: ["#f4c1a1", "#d4a17a", "#e0ac69", "#c68642", "#8d5524"]
+                colors: ["#f4c1a1", "#d4a17a", "#e0ac69", "#c68642", "#472000"]
             },
             {
                 name: "Eyes",
                 objectName1: "EyeLeft",
                 objectName2: "EyeRight",
-                colors: ["#1c4d9b", "#6a994e", "#8d5524", "#5e503f", "#000000"]
+                colors: ["#5579CF", "#55795C", "#8d5524", "#5e503f", "#000000"]
             },
             {
                 name: "Hair",
                 objectName: "Wolf3D_Hair",
-                colors: ["#000000", "#774936", "#b87333", "#d4af37", "#ffffff"]
+                colors: ["#1A1A1A", "#774936", "#b87333", "#AE9819", "#999999"]
             },
             {
                 name: "Top",
                 objectName: "Wolf3D_Outfit_Top",
-                colors: ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"]
+                colors: ["#5f5f5f", "#9e2a2b", "#6266DA", "#f4a261", "#256024"]
             },
             {
                 name: "Bottom",
                 objectName: "Wolf3D_Outfit_Bottom",
-                colors: ["#5f5f5f", "#9e2a2b", "#4361ee", "#f4a261", "#e76f51"]
+                colors: ["#5f5f5f", "#9e2a2b", "#1B3764", "#f4a261", "#256024"]
             },
             {
                 name: "Shoes",
                 objectName: "Wolf3D_Outfit_Footwear",
-                colors: ["#000000", "#ffffff", "#8d99ae", "#2b2d42", "#ef233c"]
+                colors: ["#2B2B2B", "#B158AF", "#2A5129", "#2b2d42", "#520000"]
             }
         ];
     
@@ -635,7 +669,7 @@ class App {
             section.classList.add("recoloring-section");
     
             const toggle = document.createElement("details");
-            toggle.classList.add("recoloring-toggle");
+            toggle.classList.add("toggle");
     
             const summary = document.createElement("summary");
             summary.innerHTML = `<span>${part.name}</span> <span class="arrow">▼</span>`;
@@ -655,7 +689,8 @@ class App {
     
             // Custom color picker
             const pickerLabel = document.createElement("label");
-            pickerLabel.innerText = "Personalized color:  ";
+            pickerLabel.innerText = "Personalized color:";
+            pickerLabel.style.color = "black";
             pickerLabel.style.display = "block";
             pickerLabel.style.marginTop = "8px";
             pickerLabel.style.fontSize = "12px";
@@ -681,19 +716,96 @@ class App {
         });
     }
     
-    // Utilidad para aplicar color
+    // Apply color to a part of the avatar
     applyColorToPart(part, color) {
-        if (part.objectName) {
-            const mesh = this.scene.getObjectByName(part.objectName);
-            if (mesh) mesh.material.color.set(color);
-        } else if (part.objectName1 && part.objectName2) {
-            const meshL = this.scene.getObjectByName(part.objectName1);
-            const meshR = this.scene.getObjectByName(part.objectName2);
-            if (meshL) meshL.material.color.set(color);
-            if (meshR) meshR.material.color.set(color);
-        }
-        this.renderer.render(this.scene, this.camera);
+        const textureLoader = new THREE.TextureLoader();
 
+        // Define ruta a textura neutral si aplica
+        const texturePaths = {
+            Hair: "./models/whiteHair.png",
+            Top: "./models/whiteShirt.png",
+            Bottom: "./models/whitePants.png",
+            Shoes: "./models/whiteShoes.png",
+            Skin: "./models/whiteSkin.png"
+        };
+
+        const applyToMesh = (mesh, texturePath) => {
+            if (!mesh) return;
+            if (texturePath) {
+                textureLoader.load(texturePath, (neutralTex) => {
+                    neutralTex.encoding = THREE.sRGBEncoding;
+                    mesh.material = new THREE.MeshStandardMaterial({
+                        map: neutralTex,
+                        color: new THREE.Color(color)
+                    });
+                    this.renderer.render(this.scene, this.camera);
+                });
+            } else {
+                // Solo color si no hay textura definida
+                mesh.material.color.set(color);
+                this.renderer.render(this.scene, this.camera);
+            }
+        };
+
+        const texPath = texturePaths[part.name] || null;
+
+        if (part.name === "Eyes") {
+            const meshL = this.scene.getObjectByName(part.objectName1); 
+            const meshR = this.scene.getObjectByName(part.objectName2);
+            if (meshL && meshR) {
+                const shaderMatL = this.createEyeShaderMaterial(this.originalEyeTextureL, this.maskEyeTexture, color);
+                const shaderMatR = this.createEyeShaderMaterial(this.originalEyeTextureR, this.maskEyeTexture, color);
+
+                meshL.material = shaderMatL;
+                meshR.material = shaderMatR;
+
+                this.renderer.render(this.scene, this.camera);
+            }
+
+        } else if (part.objectName) {
+            const mesh = this.scene.getObjectByName(part.objectName);
+            applyToMesh(mesh, texPath);
+        } else if (part.objectName1 && part.objectName2) {
+            const mesh1 = this.scene.getObjectByName(part.objectName1);
+            const mesh2 = this.scene.getObjectByName(part.objectName2);
+            applyToMesh(mesh1, "./models/whiteFace.png");
+            applyToMesh(mesh2, texPath);
+        }
+    }
+
+    
+    
+    createEyeShaderMaterial(baseTexture, maskTexture, colorHex) {
+        const color = new THREE.Color(colorHex);
+    
+        return new THREE.ShaderMaterial({
+            uniforms: {
+                baseMap: { value: baseTexture },
+                maskMap: { value: maskTexture },
+                colorTint: { value: color }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D baseMap;
+                uniform sampler2D maskMap;
+                uniform vec3 colorTint;
+                varying vec2 vUv;
+    
+                void main() {
+                    vec4 base = texture2D(baseMap, vUv);
+                    float mask = texture2D(maskMap, vUv).r;
+                    vec3 tinted = mix(base.rgb, colorTint, mask);
+                    tinted = min(tinted * 1.5, vec3(1.0)); // Brighten the tint by multiplying by 1.5
+                    gl_FragColor = vec4(tinted, base.a);
+                }
+            `,
+        });
     }
     
     
