@@ -106,6 +106,37 @@ canvas {
     color: rgba(30, 30, 30, 0.5);
 }
 
+/*style for the source images*/
+.hidden {
+display: none!important;
+}
+
+#images-container {
+display: flex;
+flex-wrap: wrap;
+justify-content: space-evenly;
+height: 100%;
+width: 100%;
+position: absolute;
+background-color: rgb(5,6,28);
+z-index: 100;
+overflow-y: scroll;
+}
+
+#images-container div {
+margin: 10px;
+cursor: pointer;
+}
+
+#images-container div:hover{
+filter: brightness(1.6);
+}
+
+#images-container img {
+height: 250px;
+}
+
+/*style for the target images*/
 .model-img {
   border-radius: 6px;
   transition: filter 0.2s ease, transform 0.2s ease;
@@ -116,7 +147,6 @@ canvas {
   transform: scale(1.05);
   cursor: pointer;
 }
-
   
 .toggle summary {
     font-weight: bold;
@@ -140,7 +170,6 @@ canvas {
   background-color: rgba(255, 255, 255, 0.3);
   border-radius: 6px;
 }
-
   
 .color-container {
     margin-top: 10px;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LX } from 'lexgui';
 
 // Follow this tutorial: https://docs.readyplayer.me/ready-player-me/integration-guides/api-integration/quickstart
 const SUBDOMAIN = 'oasis'; // your project name
@@ -15,6 +16,8 @@ class App {
         this.referenceModels = []; // Store reference models for interpolation
         this.verticesData = null; // Store verticesGlobal.json data
         this.preloadAvatarTemplates = [];
+        this.parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
+        this.partReferenceMap = {Nose: null, Eyes: null, Ears:null, Jaw: null, Chin: null}; // e.g. { Nose: model0, Eyes: model2, ... }
         this.debug = false; // Debug mode
         this.maskEyeTexture = new THREE.TextureLoader().load("models/maskEye.png");
         this.originalEyeTextureL = null;
@@ -86,6 +89,9 @@ class App {
             if (this.scene && typeof this.scene.clear === "function") {
                 this.scene.clear();
             }
+            // Vaciar variables globales
+            this.templates = null;
+            this.partReferenceMap = {Nose: null, Eyes: null, Ears:null, Jaw: null, Chin: null};
 
             // Limpiar el contenedor de imágenes
             const container = document.getElementById("images-container");
@@ -299,7 +305,7 @@ class App {
             gltf.scene.getObjectByName("Wolf3D_Head").morphPartsInfo = {"Nose":[], "Chin": [], "Ears":[], "Jaw":[], "Eyes":[]}; //store each part which morphattribute it corresponds to 
 
             if (this.referenceModels.length > 0) {
-                this.createMorphTargets(this.referenceModels[0]);
+                this.createMorphTargets(this.referenceModels[this.referenceModels.length - 1]);
             }
             const eyeL = this.scene.getObjectByName("EyeLeft");
             const eyeR = this.scene.getObjectByName("EyeRight");
@@ -315,11 +321,9 @@ class App {
     }
 
     createInterpolationPanel(container) {
-        const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
-
         container.innerHTML = ""; // Clear old content
 
-        parts.forEach(part => {
+        this.parts.forEach(part => {
             const section = document.createElement("div");
             section.classList.add("interpolation-section");
 
@@ -342,10 +346,62 @@ class App {
             slider.value = 0;
             slider.style.width = "100%";
             slider.addEventListener("input", (e) => {
-                this.updateMorphTarget(part, parseFloat(e.target.value));
+                //this.updateMorphTarget(part, parseFloat(e.target.value));
+                this.updateMorphTargetWithWeights(part, [parseFloat(e.target.value),0.0,0.0]);
             });
-
             innerContent.appendChild(slider);
+
+            /*const map2Dpoints = [
+                { name: "source", pos: [0.0,0.0] },
+                { name: "model1", pos: [0.0,-1.0] },
+                { name: "model2", pos: [-0.8660254,0.5] },
+                { name: "model3", pos: [0.8660254,0.5] }
+            ];
+            const panel = new LX.Map2D("Interpolation Map", map2Dpoints, null, {circular:true, showNames:false, size:[200, 200]});
+            innerContent.appendChild(panel.container);
+            panel.container.style.width = "100%";
+
+            //state of mouse
+            let dragging = false;
+            panel.container.addEventListener("pointerdown", () => dragging = true);
+            panel.container.addEventListener("pointerup", () => dragging = false);
+            panel.container.addEventListener("pointerleave", () => dragging = false);
+            panel.container.addEventListener("pointermove", (event) => {
+                if (!dragging) return;
+
+                 // Convertimos a coordenadas internas de [-1, 1]
+                const rect = panel.canvas.getBoundingClientRect();
+                const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+
+                 // Actualizar punto source en el panel
+                panel.points[0].pos = [x, y];
+                panel._draw(); // Redibujar mapa
+
+                 // Calcular pesos con tu fórmula
+                const weights = {};
+                for (let i = 1; i <= 3; i++) {
+                    const [px, py] = panel.points[i].pos;
+                    const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+                    weights[`model${i}`] = dist < 1 ? (1 - dist) : 0;
+                }
+
+                // Normalizar (opcional pero recomendable)
+                const total = weights.model1 + weights.model2 + weights.model3;
+                if (total > 0) {
+                    weights.model1 /= total;
+                    weights.model2 /= total;
+                    weights.model3 /= total;
+                }
+
+                // Aplicar interpolación
+                this.updateMorphTargetWithWeights(part, [
+                    weights.model1,
+                    weights.model2,
+                    weights.model3
+                ]);
+            });*/
+    
 
             // Template thumbnails
             const templateGrid = document.createElement("div");
@@ -372,10 +428,13 @@ class App {
 
                     const alreadyLoaded = this.referenceModels.find(ref => ref.name === templateResult.id);
                     if (!alreadyLoaded) {
-                        this.selectReferenceModel(templateResult.id);
+                        this.selectReferenceModel(templateResult.id,part);
                     } else {
                         console.log(`El modelo ${templateResult.id} ya está cargado como referencia.`);
                     }
+
+                    // Assign the selected model to this specific part
+                    this.partReferenceMap[part] = templateResult.id;
 
                     // Visually highlight selected image
                     Array.from(templateGrid.getElementsByTagName('img')).forEach(image => {
@@ -407,23 +466,30 @@ class App {
     }
 
     // Load a reference model for interpolation
-    async selectReferenceModel(modelId) {
+    async selectReferenceModel(modelId, part=null) {
         // Prevent loading if already loaded
         const alreadyLoaded = this.referenceModels.find(ref => ref.userData.modelId === modelId);
         if (alreadyLoaded) {
             console.log("Reference model already loaded:", modelId);
-            this.createMorphTargets(alreadyLoaded);
+            this.createMorphTargets(alreadyLoaded, part);
             return;
         }
     
         this.loader.load('https://api.readyplayer.me/v2/avatars/' + modelId + '.glb', (gltf) => {
             const referenceModel = gltf.scene;
             referenceModel.userData.modelId = modelId; // Guardamos el ID para evitar duplicados
+            referenceModel.name = "Reference_" + modelId;
     
             this.referenceModels.push(referenceModel);
     
-            this.createMorphTargets(referenceModel);
-    
+            if (this.referenceModels.length >= 3) {
+                console.log("Simulando morph targets para 3 modelos...");
+                this.createMorphTargets(this.referenceModels[0]);
+                this.createMorphTargets(this.referenceModels[1]);
+                this.createMorphTargets(this.referenceModels[2]);
+            } else {
+                this.createMorphTargets(referenceModel);
+            }    
             console.log("Reference model added:", modelId);
         });
     }
@@ -432,25 +498,24 @@ class App {
     createMorphTargets(referenceModel) {
         const referenceHead = referenceModel.getObjectByName("Wolf3D_Head");
         const visibleHead = this.visibleModel?.getObjectByName("Wolf3D_Head");
-    
+
         if (!referenceHead || !visibleHead) {
-            console.warn("Cannot find 'Wolf3D_Head' meshes to create morph targets.");
+            console.warn("Missing head meshes for morph targets.");
             return;
         }
-    
-        const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
-    
+
+        const parts = this.parts || ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
+
         parts.forEach(part => {
             if (this.verticesData[part]) {
-                this.addMorph(
-                    referenceHead,
-                    this.verticesData[part],
-                    part,
-                    `Reference_${part}`
-                );
+                const existing = visibleHead.morphPartsInfo[part] || [];
+                if (!existing.some(entry => entry.character === referenceModel.name)) {
+                    this.addMorph(referenceHead, this.verticesData[part], part, referenceModel.name);
+                }
             }
         });
     }
+
 
     // Initialize morph targets if they do not exist yet
     initializeMorphTargets(headMesh) {
@@ -459,8 +524,7 @@ class App {
             headMesh.morphTargetInfluences = [];
             headMesh.morphTargetDictionary = {};
             
-            const parts = ["Nose", "Eyes", "Ears", "Jaw", "Chin"];
-            parts.forEach(part => {
+            this.parts.forEach(part => {
                 if (!headMesh.morphTargetDictionary[part]) {
                     headMesh.morphTargetDictionary[part] = headMesh.morphTargetInfluences.length;
                     headMesh.morphTargetInfluences.push(0);
@@ -502,6 +566,45 @@ class App {
 
         this.render();
     } 
+
+    updateMorphTargetWithWeights(part, weights) {
+        if (!this.visibleModel || !this.visibleModel.getObjectByName("Wolf3D_Head")) {
+            console.warn("Head mesh not found.");
+            return;
+        }
+
+        const morphMesh = this.visibleModel.getObjectByName("Wolf3D_Head");
+        const morphParts = morphMesh.morphPartsInfo?.[part];
+
+        if (!morphParts || morphParts.length < weights.length) {
+            console.warn(`Not enough morph targets for part: ${part}`);
+            const morphIndex = morphMesh.morphTargetDictionary[part + "0"];
+            morphMesh.morphTargetInfluences[morphIndex] = weights[0];
+            
+            morphMesh.geometry.attributes.position.needsUpdate = true;
+            morphMesh.geometry.computeVertexNormals();
+
+            this.render();
+        } else{
+            // Reinicia todas las influencias de la parte
+            morphParts.forEach(entry => {
+                morphMesh.morphTargetInfluences[entry.id] = 0;
+            });
+
+            // Aplica los nuevos pesos a cada morph target
+            for (let i = 0; i < weights.length; i++) {
+                const entry = morphParts[i];
+                if (entry) {
+                    morphMesh.morphTargetInfluences[entry.id] = weights[i];
+                }
+            }
+
+            this.render();
+        }
+
+
+    }
+
 
     // Add a new morph target to the head mesh
     addMorph(target, vertices, code, sel_name){
@@ -627,7 +730,7 @@ class App {
     
     // Function to handle recoloring
     createRecoloringPanel(container) {
-        const parts = [
+        const partsRec = [
             {
                 name: "Skin",
                 objectName1: "Wolf3D_Head",
@@ -664,7 +767,7 @@ class App {
     
         container.innerHTML = ""; // Clear previous
     
-        parts.forEach(part => {
+        partsRec.forEach(part => {
             const section = document.createElement("div");
             section.classList.add("recoloring-section");
     
