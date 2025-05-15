@@ -22,6 +22,7 @@ class App {
         this.maskEyeTexture = new THREE.TextureLoader().load("models/maskEye.png");
         this.originalEyeTextureL = null;
         this.originalEyeTextureR = null;
+        this.maps = {};
     }
 
     // Initialize the application
@@ -237,8 +238,25 @@ class App {
     }
 
     // Create the sidebar UI (with collapsible sections)
-    createSidebar() {
-        const sidebarContainer = document.createElement('div');
+    async createSidebar() {
+        //const sidebarContainer = document.createElement('div');
+        let area = await LX.init({});
+        const dialog = new LX.Dialog("Title", p => {
+            // Start adding widgets
+            p.addText("RPM URL", null, (value) => {
+                console.log(value)
+            }, { placeholder: "https://models.readyplayer.me/{avatar_id}.glb" })
+            p.addFile("File name", (data, file) => {
+                console.log(data, file);
+            });
+            p.addButton(null, "Submit", (value)=> {
+                console.log("Go!")
+            }, {icon:""})
+        }, {modal:true});
+
+        // To use classic dialogs as simple messages or error alerts, they can be also created using LX.message
+      
+        const sidebarContainer = area.root;
         sidebarContainer.style.position = 'absolute';
         sidebarContainer.style.right = '0';
         sidebarContainer.style.top = '0';
@@ -248,7 +266,7 @@ class App {
         sidebarContainer.style.overflow = 'auto';
         sidebarContainer.style.padding = '10px';
         sidebarContainer.style.boxShadow = '0px 0px 10px rgba(0,0,0,0.3)';
-        document.body.appendChild(sidebarContainer);
+        // document.body.appendChild(sidebarContainer);
     
         // Helper to create collapsible sections
         const createDropdown = (title) => {
@@ -297,33 +315,39 @@ class App {
 
     // Load avatar GLB into the scene
     loadAvatar(id, preview) {
-        this.loader.load('https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), (gltf) => {
-            if(!this.visibleModel) {
-                this.scene.add(gltf.scene);
-            }
-            this.visibleModel = gltf.scene;
-            gltf.scene.getObjectByName("Wolf3D_Head").morphPartsInfo = {"Nose":[], "Chin": [], "Ears":[], "Jaw":[], "Eyes":[]}; //store each part which morphattribute it corresponds to 
 
-            if (this.referenceModels.length > 0) {
-                this.createMorphTargets(this.referenceModels[this.referenceModels.length - 1]);
-            }
-            const eyeL = this.scene.getObjectByName("EyeLeft");
-            const eyeR = this.scene.getObjectByName("EyeRight");
+        const promise = new Promise(( resolve, reject ) => {
 
-            if (eyeL && eyeR) {
-                this.originalEyeTextureL = eyeL.material.map;
-                this.originalEyeTextureR = eyeR.material.map;
-            }
-
-            this.render();
-            return true;
+            this.loader.load('https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), (gltf) => {
+                if(!this.visibleModel) {
+                    this.scene.add(gltf.scene);
+                }
+                this.visibleModel = gltf.scene;
+                gltf.scene.getObjectByName("Wolf3D_Head").morphPartsInfo = {"Nose":[], "Chin": [], "Ears":[], "Jaw":[], "Eyes":[]}; //store each part which morphattribute it corresponds to 
+    
+                if (this.referenceModels.length > 0) {
+                    this.createMorphTargets(this.referenceModels[this.referenceModels.length - 1]);
+                }
+                const eyeL = this.scene.getObjectByName("EyeLeft");
+                const eyeR = this.scene.getObjectByName("EyeRight");
+    
+                if (eyeL && eyeR) {
+                    this.originalEyeTextureL = eyeL.material.map;
+                    this.originalEyeTextureR = eyeR.material.map;
+                }
+    
+                this.render();
+                resolve();
+            });
         });
+
+        return promise;
     }
 
     createInterpolationPanel(container) {
         container.innerHTML = ""; // Clear old content
 
-        this.parts.forEach(part => {
+        this.parts.forEach(async part => {
             const section = document.createElement("div");
             section.classList.add("interpolation-section");
 
@@ -351,56 +375,74 @@ class App {
             });
             innerContent.appendChild(slider);
 
-            /*const map2Dpoints = [
+            const map2Dpoints = [
                 { name: "source", pos: [0.0,0.0] },
                 { name: "model1", pos: [0.0,-1.0] },
-                { name: "model2", pos: [-0.8660254,0.5] },
-                { name: "model3", pos: [0.8660254,0.5] }
+                { name: "model2", pos: [-1,1] },
+                { name: "model3", pos: [1,1] }
             ];
-            const panel = new LX.Map2D("Interpolation Map", map2Dpoints, null, {circular:true, showNames:false, size:[200, 200]});
-            innerContent.appendChild(panel.container);
-            panel.container.style.width = "100%";
+
+           
+            const map = this.maps[part] = new LX.Map2D("Interpolation Map", map2Dpoints, (value, event) => {
+                // Aplicar interpolación
+                this.updateMorphTargetWithWeights(part, [
+                    value.model1,
+                    value.model2,
+                    value.model3
+                ]);
+                console.log(value);
+            }, {circular:true, showNames:false, size:[400, 400]});
+
+            map.map2d.root.style.width = "400px";
+            map.map2d.root.style.height = "400px";
+            map.root.style.left = "10px";
+            // area.attach(map);
+            innerContent.append(map.root);
+            // innerContent.style.width = "80%";
+            // innerContent.style.height = "10%";
+            // innerContent.appendChild(map.container);
+            //map.container.style.width = "100%";
 
             //state of mouse
             let dragging = false;
-            panel.container.addEventListener("pointerdown", () => dragging = true);
-            panel.container.addEventListener("pointerup", () => dragging = false);
-            panel.container.addEventListener("pointerleave", () => dragging = false);
-            panel.container.addEventListener("pointermove", (event) => {
-                if (!dragging) return;
+            // map.container.addEventListener("pointerdown", () => dragging = true);
+            // map.container.addEventListener("pointerup", () => dragging = false);
+            // map.container.addEventListener("pointerleave", () => dragging = false);
+            // map.container.addEventListener("pointermove", (event) => {
+            //     if (!dragging) return;
 
-                 // Convertimos a coordenadas internas de [-1, 1]
-                const rect = panel.canvas.getBoundingClientRect();
-                const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+            //      // Convertimos a coordenadas internas de [-1, 1]
+            //     const rect = map.canvas.getBoundingClientRect();
+            //     const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            //     const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
 
-                 // Actualizar punto source en el panel
-                panel.points[0].pos = [x, y];
-                panel._draw(); // Redibujar mapa
+            //      // Actualizar punto source en el map
+            //     map.points[0].pos = [x, y];
+            //     map._draw(); // Redibujar mapa
 
-                 // Calcular pesos con tu fórmula
-                const weights = {};
-                for (let i = 1; i <= 3; i++) {
-                    const [px, py] = panel.points[i].pos;
-                    const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
-                    weights[`model${i}`] = dist < 1 ? (1 - dist) : 0;
-                }
+            //      // Calcular pesos con tu fórmula
+            //     const weights = {};
+            //     for (let i = 1; i <= 3; i++) {
+            //         const [px, py] = map.points[i].pos;
+            //         const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+            //         weights[`model${i}`] = dist < 1 ? (1 - dist) : 0;
+            //     }
 
-                // Normalizar (opcional pero recomendable)
-                const total = weights.model1 + weights.model2 + weights.model3;
-                if (total > 0) {
-                    weights.model1 /= total;
-                    weights.model2 /= total;
-                    weights.model3 /= total;
-                }
+            //     // Normalizar (opcional pero recomendable)
+            //     const total = weights.model1 + weights.model2 + weights.model3;
+            //     if (total > 0) {
+            //         weights.model1 /= total;
+            //         weights.model2 /= total;
+            //         weights.model3 /= total;
+            //     }
 
-                // Aplicar interpolación
-                this.updateMorphTargetWithWeights(part, [
-                    weights.model1,
-                    weights.model2,
-                    weights.model3
-                ]);
-            });*/
+            //     // Aplicar interpolación
+            //     this.updateMorphTargetWithWeights(part, [
+            //         weights.model1,
+            //         weights.model2,
+            //         weights.model3
+            //     ]);
+            // });
     
 
             // Template thumbnails
