@@ -26,6 +26,8 @@ body{
 .hidden {
     display: none;
 }
+
+/*style for the loading spinner*/
 .spinner {
     border: 8px solid #f3f3f3;
     border-top: 8px solid rgba(16, 70, 120);
@@ -35,12 +37,12 @@ body{
     animation: spin 1s linear infinite;
     margin: 0 auto;
 }
-
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }  
 
+/*style for the back button*/
 #back-button {
     position: fixed;
     bottom: 20px;
@@ -52,27 +54,26 @@ body{
     background-color: rgba(0, 0, 0, 0.6);
     color: white;
     cursor: pointer;
-    z-index: 150;
+    z-index: 90;
     box-shadow: 2px 2px 8px rgba(0,0,0,0.5);
     transition: background-color 0.3s ease;
 }
-  
 #back-button:hover {
     background-color: rgba(0, 0, 0, 0.8);
 }  
 
 .title{
-    position: absolute; /* titol a sobre del canvas */
+    position: absolute; /* the title is positioned absolutely */
     transform: translateX(-50%);
     z-index: 10; 
-    
+    text-shadow: black 1px 1px 2px;
 }
 
 h1 {
     left: 8%;
     color: rgb(16, 70, 120);
     padding: 10px;
-    font-size: 55px;
+    font-size: 50px;
 }
 
 p {
@@ -99,6 +100,7 @@ canvas {
     height: 100%;
     display: block;
     z-index: 0; /* El canvas está en el fondo */
+    pointer-events: auto;
 }
 
 #response{
@@ -136,6 +138,33 @@ filter: brightness(1.6);
 height: 250px;
 }
 
+/*style for the plus button (to add avatars)*/
+#images-container .plus-wrapper {
+  margin: 10px;
+  height: 250px;
+  width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#images-container .plus-wrapper button {
+  height: 80px;
+  width: 80px;
+  font-size: 3rem;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.864);
+  color: rgba(16, 70, 120);
+  border: none;
+  cursor: pointer;
+  transition: filter 0.3s ease;
+}
+
+#images-container .plus-wrapper button:hover {
+  filter: brightness(0.5);
+}
+
+
 /*style for the target images*/
 .model-img {
   border-radius: 6px;
@@ -147,7 +176,8 @@ height: 250px;
   transform: scale(1.05);
   cursor: pointer;
 }
-  
+
+/*style for the toggle sections*/  
 .toggle summary {
     font-weight: bold;
     background: white;
@@ -186,4 +216,3 @@ height: 250px;
     border: 2px solid white;
     box-shadow: 0 0 3px rgba(0,0,0,0.5);
 }
-  

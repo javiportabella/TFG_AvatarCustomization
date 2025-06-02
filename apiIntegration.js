@@ -12,6 +12,8 @@ class App {
     constructor(){
         // Initialize properties
         this.loader = new GLTFLoader();
+        this.scene = null;
+        this.area = null; // LX area for the sidebar
         this.templates = null;
         this.referenceModels = []; // Store reference models for interpolation
         this.verticesData = null; // Store verticesGlobal.json data
@@ -42,46 +44,8 @@ class App {
             const urlParams = new URLSearchParams(window.location.search);
             this.debug = urlParams.get("debug");
 
-            for(let i = 0; i < this.templates.length; i++) {
-                const div = document.createElement("div");
-                const img = document.createElement("img");
-                img.src = this.templates[i].imageUrl;
-                img["data-id"] = i;
+            this.populateAvatarSelector(htmlContainer);
 
-                div.appendChild(img);
-                htmlContainer.appendChild(div);
-
-                div.addEventListener("click", async (event) => {
-                    // Show loading
-                    const loadingElement = document.getElementById("loading");
-                    loadingElement.classList.remove("hidden");
-                
-                    try {
-                        // We use the data-id attribute to get the index of the template 
-                        // and then we get the template data from the templates array
-                        const templateData = this.templates[event.target["data-id"]];
-                        const template = await this.assignTemplate(templateData);
-                        if (template) {
-                            await this.loadAvatar(template.id, "preview");
-                            htmlContainer.classList.add("hidden");
-                        }
-                    } catch (error) {
-                        console.error("Error loading avatar:", error);
-                    } finally {
-                        // Hide loading
-                        loadingElement.classList.add("hidden");
-                    }
-                });
-                
-                
-            }
-            htmlContainer.classList.remove("hidden");
-            document.getElementById("back-button").classList.remove("hidden");
-            if (this.templates) {
-                this.createSidebar();
-            } else {
-                console.error("Error: Could not load avatar templates.");
-            }
         }
         // Configurar el botón de retroceso para reiniciar la app
         const backButton = document.getElementById("back-button");
@@ -90,9 +54,17 @@ class App {
             if (this.scene && typeof this.scene.clear === "function") {
                 this.scene.clear();
             }
+
+            // Limpiar la sidebar
+            this.area.root.innerHTML = "";
+
             // Vaciar variables globales
-            this.templates = null;
+            //this.templates = null;
+            this.referenceModels = [];
             this.partReferenceMap = {Nose: null, Eyes: null, Ears:null, Jaw: null, Chin: null};
+            this.originalEyeTextureL = null;
+            this.originalEyeTextureR = null;
+            this.maps = {};
 
             // Limpiar el contenedor de imágenes
             const container = document.getElementById("images-container");
@@ -105,6 +77,72 @@ class App {
             this.init();
         };
     }
+
+    populateAvatarSelector(container) {
+        container.innerHTML = ""; // Limpiar contenido anterior
+
+        // Botón "+" para añadir avatar personalizado
+        const plusDiv = document.createElement("div");
+        plusDiv.classList.add("plus-wrapper");
+        const plusButton = document.createElement("button");
+        plusButton.innerText = "+";
+        plusButton.onclick = () => this.showOwnAvatarDialog();
+        plusDiv.appendChild(plusButton);
+        container.appendChild(plusDiv);
+
+        // Crear tarjetas para cada template
+        this.templates.forEach((template, i) => {
+            const div = document.createElement("div");
+            const img = document.createElement("img");
+            img.src = template.imageUrl;
+            img.setAttribute("data-id", i);
+            img.style.cursor = "pointer";
+
+            img.addEventListener("click", async (event) => {
+                // Show loading
+                const loadingElement = document.getElementById("loading");
+                loadingElement.classList.remove("hidden");
+            
+                try {
+                    // We use the data-id attribute to get the index of the template 
+                    // and then we get the template data from the templates array
+                    const templateData = this.templates[event.target.getAttribute("data-id")];
+                    let avatarId;
+                    if (templateData.custom) {
+                        // Si es personalizado, no hace falta pasar por assignTemplate
+                        avatarId = templateData.id;
+                    } else {
+                        const template = await this.assignTemplate(templateData);
+                        if (!template) return;
+                        avatarId = template.id;
+                    }
+
+                    if (avatarId) {
+                        await this.loadAvatar(avatarId, "preview");
+                        container.classList.add("hidden");
+
+                        if (this.templates) {
+                            this.createSidebar();
+                        } else {
+                            console.error("Error: Could not load avatar templates.");
+                        }
+                    }
+                } catch (error) {
+                        console.error("Error loading avatar:", error);
+                } finally {
+                        // Hide loading
+                        loadingElement.classList.add("hidden");
+                }
+            });
+
+            div.appendChild(img);
+            container.appendChild(div);
+        });
+
+        container.classList.remove("hidden");
+        document.getElementById("back-button")?.classList.remove("hidden");
+    }
+
 
     // Create an anonymous user to get access token
     async createAnonymousUser() { // Documentation: https://docs.readyplayer.me/ready-player-me/integration-guides/api-integration/quickstart#create-anonymous-user
@@ -139,6 +177,11 @@ class App {
 
     // Assign a template to the user, generate a temporary avatar ID
     async assignTemplate(data) {
+        // If it's a custom avatar, we don't call the API, we return the ID directly.
+        if (data.custom) {
+            return { id: data.id, url: data.customUrl};
+        }
+
         if(!this.preloadAvatarTemplates[data.id]) {
             const requestOptions = {
                 method: "POST",
@@ -182,6 +225,7 @@ class App {
     // Initialize the Three.js scene
     async initScene(){
         this.scene = new THREE.Scene();
+        this.area = await LX.init({});
         
         // Set background image
         const bgTexture = new THREE.TextureLoader().load('filesUtiles/fondoplaya.avif');
@@ -228,6 +272,73 @@ class App {
         this.render();
     }
 
+    showOwnAvatarDialog() {
+        let glbUrl = null;
+        let avatarId = null;
+        
+        new LX.Dialog("Use your own avatar", p => {
+            // Input de URL
+            p.addText("RPM URL", null, (value) => {
+                const match = value.match(/readyplayer\.me\/([\w\d-]+)/);
+                if (glbUrl) {
+                    LX.message("Please enter a URL OR upload a GLB file, not both.","Error");
+                    return;
+                }
+                glbUrl = value;
+                avatarId = match[1].replace(".glb", "");
+            }, { placeholder: "https://models.readyplayer.me/{avatar_id}.glb" });
+
+
+            // Input de archivo local
+            p.addFile("Upload GLB", async (data, file) => {
+                if (file && file.name.endsWith(".glb")) {
+                    const blobURL = URL.createObjectURL(file);
+                    if (glbUrl) {
+                        LX.message("Please enter a URL OR upload a GLB file, not both.","Error");
+                        return;
+                    }
+                    glbUrl = blobURL;
+                    avatarId = file.name.replace(".glb", "");
+                } else {
+                    LX.message("Please upload a valid .glb file from Ready Player Me with its original name.","Error");
+                }
+            });
+
+            // Botón Submit
+            p.addButton(null, "Submit", async () => {
+                if (!glbUrl) {
+                    LX.message("Please enter a valid URL or upload a GLB file.","Error");
+                    return;
+                }
+                
+
+                // Crear el nuevo template
+                const newTemplate = {
+                    id: avatarId,
+                    imageUrl: `https://models.readyplayer.me/${avatarId}.png`,
+                    name: "Custom Avatar",
+                    custom: true, // Flag to indicate this is a custom avatar
+                    customUrl: glbUrl
+                };
+
+                if (this.templates.some(template => template.id === avatarId)) {
+                    LX.message("This avatar already exists in the list.","Error");
+                    return;
+                }
+                // Añadir al principio
+                this.templates.unshift(newTemplate);
+
+                // Volver a renderizar el selector de avatares
+                const container = document.getElementById("images-container");
+                container.innerHTML = ""; // limpiar
+                this.populateAvatarSelector(container)
+                
+            });
+        }, { modal: true });
+    }
+
+
+
     updateRendererSize() {
         const sidebarWidth = this.sidebar ? this.sidebar.offsetWidth : 0;
         this.renderer.setSize(window.innerWidth - sidebarWidth, window.innerHeight);
@@ -240,23 +351,10 @@ class App {
     // Create the sidebar UI (with collapsible sections)
     async createSidebar() {
         //const sidebarContainer = document.createElement('div');
-        let area = await LX.init({});
-        const dialog = new LX.Dialog("Title", p => {
-            // Start adding widgets
-            p.addText("RPM URL", null, (value) => {
-                console.log(value)
-            }, { placeholder: "https://models.readyplayer.me/{avatar_id}.glb" })
-            p.addFile("File name", (data, file) => {
-                console.log(data, file);
-            });
-            p.addButton(null, "Submit", (value)=> {
-                console.log("Go!")
-            }, {icon:""})
-        }, {modal:true});
 
         // To use classic dialogs as simple messages or error alerts, they can be also created using LX.message
       
-        const sidebarContainer = area.root;
+        const sidebarContainer = this.area.root;
         sidebarContainer.style.position = 'absolute';
         sidebarContainer.style.right = '0';
         sidebarContainer.style.top = '0';
@@ -266,7 +364,7 @@ class App {
         sidebarContainer.style.overflow = 'auto';
         sidebarContainer.style.padding = '10px';
         sidebarContainer.style.boxShadow = '0px 0px 10px rgba(0,0,0,0.3)';
-        // document.body.appendChild(sidebarContainer);
+        document.body.appendChild(sidebarContainer);
     
         // Helper to create collapsible sections
         const createDropdown = (title) => {
@@ -318,7 +416,8 @@ class App {
 
         const promise = new Promise(( resolve, reject ) => {
 
-            this.loader.load('https://models.readyplayer.me/'+id+'.glb' + (preview ? "?preview=true" : ""), (gltf) => {
+            const url = (typeof id === "object" && id.url) ? id.url : `https://models.readyplayer.me/${id}.glb${preview ? "?preview=true" : ""}`;
+            this.loader.load(url, (gltf) => {
                 if(!this.visibleModel) {
                     this.scene.add(gltf.scene);
                 }
@@ -385,65 +484,26 @@ class App {
            
             const map = this.maps[part] = new LX.Map2D("Interpolation Map", map2Dpoints, (value, event) => {
                 // Aplicar interpolación
-                this.updateMorphTargetWithWeights(part, [
-                    value.model1,
-                    value.model2,
-                    value.model3
-                ]);
-                console.log(value);
+                if (this.referenceModels.length < 3) {
+                    LX.message(`Select ${3-this.referenceModels.length} more to use the Voronoi-diagram interpolation`,`Only ${this.referenceModels.length} avatars selected`); 
+                    console.warn("Not enough reference models loaded for interpolation.");  
+                    return;
+                }
+                else {
+                    // Aplicar interpolación
+                    this.updateMorphTargetWithWeights(part, [
+                        value.model1,
+                        value.model2,
+                        value.model3
+                    ]);
+                    //console.log(value);
+                }
             }, {circular:true, showNames:false, size:[400, 400]});
 
             map.map2d.root.style.width = "400px";
             map.map2d.root.style.height = "400px";
             map.root.style.left = "10px";
-            // area.attach(map);
-            innerContent.append(map.root);
-            // innerContent.style.width = "80%";
-            // innerContent.style.height = "10%";
-            // innerContent.appendChild(map.container);
-            //map.container.style.width = "100%";
-
-            //state of mouse
-            let dragging = false;
-            // map.container.addEventListener("pointerdown", () => dragging = true);
-            // map.container.addEventListener("pointerup", () => dragging = false);
-            // map.container.addEventListener("pointerleave", () => dragging = false);
-            // map.container.addEventListener("pointermove", (event) => {
-            //     if (!dragging) return;
-
-            //      // Convertimos a coordenadas internas de [-1, 1]
-            //     const rect = map.canvas.getBoundingClientRect();
-            //     const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            //     const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
-
-            //      // Actualizar punto source en el map
-            //     map.points[0].pos = [x, y];
-            //     map._draw(); // Redibujar mapa
-
-            //      // Calcular pesos con tu fórmula
-            //     const weights = {};
-            //     for (let i = 1; i <= 3; i++) {
-            //         const [px, py] = map.points[i].pos;
-            //         const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
-            //         weights[`model${i}`] = dist < 1 ? (1 - dist) : 0;
-            //     }
-
-            //     // Normalizar (opcional pero recomendable)
-            //     const total = weights.model1 + weights.model2 + weights.model3;
-            //     if (total > 0) {
-            //         weights.model1 /= total;
-            //         weights.model2 /= total;
-            //         weights.model3 /= total;
-            //     }
-
-            //     // Aplicar interpolación
-            //     this.updateMorphTargetWithWeights(part, [
-            //         weights.model1,
-            //         weights.model2,
-            //         weights.model3
-            //     ]);
-            // });
-    
+            innerContent.append(map.root);    
 
             // Template thumbnails
             const templateGrid = document.createElement("div");
