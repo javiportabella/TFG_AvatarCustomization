@@ -63,7 +63,8 @@ body{
 }  
 
 .title{
-    position: absolute; /* the title is positioned absolutely */
+    position: fixed; /* the title is positioned absolutely */
+    left: 120px;
     transform: translateX(-50%);
     z-index: 10; 
     text-shadow: black 1px 1px 2px;
@@ -106,6 +107,37 @@ canvas {
 #response{
     background-color: rgb(255, 255, 255);
     color: rgba(30, 30, 30, 0.5);
+}
+
+/*style for the sidebar*/
+#sidebar-container {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 300px;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.3);
+    overflow: auto;
+    padding: 10px;
+    box-shadow: 0px 0px 10px rgba(0,0,0,0.3);
+    padding-top: 50px;
+}
+
+/*style for the sidebar dropdown headers*/
+#sidebar-headers {
+    background: rgba(255, 255, 255, 0.3);
+    box-shadow: 1px 2px 4px rgba(0,0,0,0.4);
+    color: rgba(16, 70, 120, 1);
+    padding: 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: bold;
+}
+#sidebar-headers:hover {
+    background-color: rgba(16, 70, 120, 1);
+    color: white;
+    font-weight: normal;
 }
 
 /*style for the source images*/
@@ -164,6 +196,19 @@ height: 250px;
   filter: brightness(0.5);
 }
 
+/*style for the button to close the sidebar*/
+#sidebar-toggle-btn {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    z-index: 200; /* Encima de todo */
+    cursor: pointer;
+    border-radius: 5px;
+    padding: 5px;
+    transition: background-color 0.3s ease;
+}
 
 /*style for the target images*/
 .model-img {
@@ -181,7 +226,8 @@ height: 250px;
 .toggle summary {
     font-weight: bold;
     background: white;
-    color: black;
+    color: rgba(16, 70, 120, 1);
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.4);
     padding: 8px;
     border-radius: 5px;
     cursor: pointer;
@@ -189,11 +235,12 @@ height: 250px;
     justify-content: space-between;
     align-items: center;
 }
-  
-.toggle[open] summary {
-    background: #f0f0f0;
+.toggle summary:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
-
+.toggle[open] summary {
+    background: rgba(255, 255, 255, 0.3);
+}
 .toggle {
   margin-bottom: 16px;
   border: 1px solid #cccccc67;

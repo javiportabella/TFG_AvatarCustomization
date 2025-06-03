@@ -355,16 +355,26 @@ class App {
         // To use classic dialogs as simple messages or error alerts, they can be also created using LX.message
       
         const sidebarContainer = this.area.root;
-        sidebarContainer.style.position = 'absolute';
-        sidebarContainer.style.right = '0';
-        sidebarContainer.style.top = '0';
+        sidebarContainer.id = "sidebar-container";
         sidebarContainer.style.width = '300px';
-        sidebarContainer.style.height = '100%';
-        sidebarContainer.style.backgroundColor = 'rgba(139, 139, 139, 0.7)';
-        sidebarContainer.style.overflow = 'auto';
-        sidebarContainer.style.padding = '10px';
-        sidebarContainer.style.boxShadow = '0px 0px 10px rgba(0,0,0,0.3)';
         document.body.appendChild(sidebarContainer);
+
+        // Añadir botón para mostrar/ocultar sidebar
+        const toggleBtn = document.createElement('img');
+        //toggleBtn.id = "toggle-sidebar-btn";
+        //toggleBtn.textContent = "☰"; // menú estilo hamburguesa
+        toggleBtn.src = 'filesUtiles/sidebarIcon.png'; // Ruta del icono
+        toggleBtn.alt = 'Toggle Sidebar';
+        toggleBtn.id = 'sidebar-toggle-btn';
+
+        // Comportamiento del botón
+        toggleBtn.addEventListener("click", () => {
+        sidebarContainer.style.display = sidebarContainer.style.display === "none" ? "block" : "none";
+        });
+
+        document.body.appendChild(toggleBtn);
+        
+
     
         // Helper to create collapsible sections
         const createDropdown = (title) => {
@@ -373,13 +383,7 @@ class App {
     
             const header = document.createElement('div');
             header.innerText = title;
-            header.style.backgroundColor = 'rgb(16, 70, 120)';
-            header.style.color = 'white';
-            header.style.padding = '10px';
-            header.style.cursor = 'pointer';
-            header.style.borderRadius = '5px';
-            header.style.textAlign = 'center';
-    
+            header.id = 'sidebar-headers';
             const content = document.createElement('div');
             content.style.display = 'none';
             content.style.padding = '10px';
@@ -459,6 +463,10 @@ class App {
 
             const innerContent = document.createElement("div");
             innerContent.className = "interpolation-content";
+            innerContent.style.display = "flex";
+            innerContent.style.alignItems = "center";      // Centrado vertical
+            innerContent.style.flexDirection = "column";   // Organiza verticalmente
+
 
             // Slider
             const slider = document.createElement("input");
@@ -472,7 +480,13 @@ class App {
                 //this.updateMorphTarget(part, parseFloat(e.target.value));
                 this.updateMorphTargetWithWeights(part, [parseFloat(e.target.value),0.0,0.0]);
             });
-            innerContent.appendChild(slider);
+            //innerContent.appendChild(slider);
+
+            const mapWrapper = document.createElement("div");
+            mapWrapper.style.width = "200px";
+            mapWrapper.style.height = "200px";
+            mapWrapper.style.position = "relative"; // para evitar que se expanda
+            mapWrapper.style.overflow = "hidden";  // asegura que no se desborde
 
             const map2Dpoints = [
                 { name: "source", pos: [0.0,0.0] },
@@ -482,7 +496,7 @@ class App {
             ];
 
            
-            const map = this.maps[part] = new LX.Map2D("Interpolation Map", map2Dpoints, (value, event) => {
+            const map = this.maps[part] = new LX.CanvasMap2D(map2Dpoints, (value, event) => {
                 // Aplicar interpolación
                 if (this.referenceModels.length < 3) {
                     LX.message(`Select ${3-this.referenceModels.length} more to use the Voronoi-diagram interpolation`,`Only ${this.referenceModels.length} avatars selected`); 
@@ -498,12 +512,14 @@ class App {
                     ]);
                     //console.log(value);
                 }
-            }, {circular:true, showNames:false, size:[400, 400]});
+            }, {circular:true, showNames:true, size:[200, 200]});
 
-            map.map2d.root.style.width = "400px";
-            map.map2d.root.style.height = "400px";
-            map.root.style.left = "10px";
-            innerContent.append(map.root);    
+            // Asegura que el canvas se adapte al wrapper
+            map.root.style.width = "100%";
+            map.root.style.height = "100%";
+            map.root.style.display = "block"; // elimina espacio extra  
+            mapWrapper.appendChild(map.root);
+            innerContent.appendChild(mapWrapper);
 
             // Template thumbnails
             const templateGrid = document.createElement("div");
