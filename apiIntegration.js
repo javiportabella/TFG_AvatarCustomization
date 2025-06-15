@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { LX } from 'lexgui';
 
@@ -413,6 +415,28 @@ class App {
         // ====== AGING EFFECTS ======
         const agingContent = createDropdown('AGING EFFECTS');
         this.createAgingPanel(agingContent);
+
+        // ====== EXPORT AVATAR ======
+        const exportBtn = document.createElement("img");
+        exportBtn.src = 'filesUtiles/exportIcon.png';
+        exportBtn.alt = 'Export Avatar';
+        exportBtn.style.width = "20px";
+        exportBtn.style.height = "20px";
+        exportBtn.style.cursor = 'pointer';
+        exportBtn.onclick = () => this.exportAvatar();
+        
+        const tooltip = document.createElement("span");
+        tooltip.className = "custom-tooltip";
+        tooltip.textContent = "Export Avatar";
+        const btnContainer = document.createElement("div");
+        btnContainer.className = "btn-container";
+        btnContainer.appendChild(exportBtn);
+        btnContainer.appendChild(tooltip);
+        btnContainer.style.position = "absolute";
+        btnContainer.style.left = "50%";
+        btnContainer.style.transform = "translateX(-50%)";
+
+        sidebarContainer.appendChild(btnContainer);
     }
 
     // Load avatar GLB into the scene
@@ -1286,6 +1310,58 @@ class App {
         return material;
     }
 
+    // Export the current avatar as a GLB file
+    // This function uses the GLTFExporter to convert the avatar model to GLB format
+    exportAvatar() {
+        if (!this.visibleModel) {
+            console.error("No avatar to export.");
+            return;
+        }
+
+        const exporter = new GLTFExporter();
+
+        // Clonar con esqueleto y huesos
+        const clonedModel = clone(this.visibleModel);
+
+        // Sustituir ShaderMaterials si es necesario
+        clonedModel.traverse((child) => {
+            if (child.isMesh) {
+                const originalMat = child.material;
+                if (originalMat instanceof THREE.ShaderMaterial) {
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: 0xffffff,
+                        map: originalMat.uniforms?.baseMap?.value || null,
+                        skinning: true,
+                    });
+                } else if (originalMat) {
+                    originalMat.skinning = true;
+                }
+            }
+        });
+
+        // Opciones de exportación
+        const options = {
+            binary: true,
+            onlyVisible: true,
+            maxTextureSize: 4096
+        };
+
+        // Guardar GLB
+        exporter.parse(
+            clonedModel,
+            (result) => {
+                const blob = new Blob([result], { type: "application/octet-stream" });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "custom-avatar.glb";
+                link.click();
+            },
+            (error) => {
+                console.error("Export error:", error);
+            },
+            options
+        );
+    }
 
 
 }

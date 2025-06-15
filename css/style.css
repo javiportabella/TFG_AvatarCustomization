@@ -263,3 +263,35 @@ height: 250px;
     border: 2px solid white;
     box-shadow: 0 0 3px rgba(0,0,0,0.5);
 }
+
+/* Tooltip base */
+.custom-tooltip {
+  visibility: hidden;
+  width: 80px;
+  background-color: #333;
+  color: white;
+  text-align: center;
+  border-radius: 4px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1000;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 12px;
+  pointer-events: none; /* Evita interferencias con el hover */
+}
+
+/* Contenedor del botón (para posicionamiento relativo) */
+.btn-container {
+  position: relative;
+  display: inline-block;
+}
+
+/* Mostrar tooltip al hacer hover */
+.btn-container:hover .custom-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
